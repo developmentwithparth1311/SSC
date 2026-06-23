@@ -67,3 +67,54 @@ export async function decryptSignalMessage(peerUserId, ourUserId, ciphertext, si
     signal_message_type: signalMessageType,
   });
 }
+
+export async function createGroupSenderKeyDistribution(ourUserId, distributionId) {
+  if (!isNativeLibsignalAvailable()) {
+    throw new Error('Group sender keys require the SSC Android app');
+  }
+  return SscLibsignal.createGroupSenderKeyDistribution({
+    our_user_id: ourUserId,
+    distribution_id: distributionId,
+  });
+}
+
+export async function processGroupSenderKeyDistribution(senderUserId, skdm) {
+  if (!isNativeLibsignalAvailable()) {
+    throw new Error('Group sender keys require the SSC Android app');
+  }
+  return SscLibsignal.processGroupSenderKeyDistribution({
+    sender_user_id: senderUserId,
+    skdm,
+  });
+}
+
+export async function hasGroupSenderKey(senderUserId, distributionId) {
+  if (!isNativeLibsignalAvailable()) {
+    return { has_sender_key: false, skipped: true, reason: 'web' };
+  }
+  return SscLibsignal.hasGroupSenderKey({
+    sender_user_id: senderUserId,
+    distribution_id: distributionId,
+  });
+}
+
+export async function encryptGroupMessage(ourUserId, distributionId, plaintext) {
+  if (!isNativeLibsignalAvailable()) {
+    throw new Error('Group encrypt requires the SSC Android app');
+  }
+  return SscLibsignal.encryptGroupMessage({
+    our_user_id: ourUserId,
+    distribution_id: distributionId,
+    plaintext,
+  });
+}
+
+export async function decryptGroupMessage(senderUserId, ciphertext) {
+  if (!isNativeLibsignalAvailable()) {
+    throw new Error('Group decrypt requires the SSC Android app');
+  }
+  return SscLibsignal.decryptGroupMessage({
+    sender_user_id: senderUserId,
+    ciphertext,
+  });
+}

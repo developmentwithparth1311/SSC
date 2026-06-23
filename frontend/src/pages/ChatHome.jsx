@@ -26,6 +26,14 @@ import { consumePendingInvite } from '../lib/invites';
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
 import { getSessionToken } from '../lib/sessionStore';
 import { ensureSignalSession } from '../lib/signal/x3dh';
+import { encryptAttachmentBytes, encryptSignalAttachment } from '../lib/signal/attachments';
+import {
+  ensureGroupSenderKeysDistributed,
+  encryptGroupText,
+  processIncomingSkdmMessage,
+} from '../lib/signal/groupMessages';
+import { SKDM_MESSAGE_TYPE } from '../lib/signal/constants';
+import { STATUS_SKDM_MESSAGE_TYPE, processIncomingStatusSkdmMessage } from '../lib/signal/statuses';
 import { encryptSignalText } from '../lib/signal/messages';
 import { ProtocolVersion } from '../lib/signal/constants';
 import {
@@ -52,6 +60,8 @@ export default function ChatHome() {
   const [encryptionHint, setEncryptionHint] = useState(null);
   const [autoTranslate, setAutoTranslate] = useState(false);
   const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [translationOnDevice, setTranslationOnDevice] = useState(false);
+  const [serverTranslationAllowed, setServerTranslationAllowed] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
 
   useEffect(() => {
@@ -127,9 +137,19 @@ export default function ChatHome() {
   const showTranslateControls = translationEnabled && !sameLangAsPeer;
 
   useEffect(() => {
-    api.get('/config')
-      .then(({ data }) => setTranslationEnabled(!!data?.translation_enabled))
-      .catch(() => setTranslationEnabled(false));
+    (async () => {
+      try {
+        const { resolveTranslationAvailability } = await import('../lib/translation/translateClient');
+        const avail = await resolveTranslationAvailability();
+        setTranslationOnDevice(avail.onDevice);
+        setServerTranslationAllowed(avail.serverAllowed);
+        setTranslationEnabled(avail.enabled);
+      } catch {
+        setTranslationEnabled(false);
+        setTranslationOnDevice(false);
+        setServerTranslationAllowed(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -384,8 +404,19 @@ export default function ChatHome() {
     const s = new ChatSocket(getSessionToken(), {
       onMessage: (data) => {
         if (data.type === 'message') {
-          if (data.data.conversation_id === activeId) {
-            setMessages((m) => [...m, data.data]);
+          const incoming = data.data;
+          if (incoming?.message_type === SKDM_MESSAGE_TYPE) {
+            processIncomingSkdmMessage(incoming, {
+              myUserId: user.user_id,
+              peerUserId: peer?.user_id,
+            }).catch(() => {});
+          } else if (incoming?.message_type === STATUS_SKDM_MESSAGE_TYPE) {
+            processIncomingStatusSkdmMessage(incoming, {
+              myUserId: user.user_id,
+              peerUserId: incoming.sender_id !== user.user_id ? incoming.sender_id : peer?.user_id,
+            }).catch(() => {});
+          } else if (incoming.conversation_id === activeId) {
+            setMessages((m) => [...m, incoming]);
           }
           loadConversations();
         } else if (data.type === 'typing') {
@@ -397,7 +428,7 @@ export default function ChatHome() {
           // incoming call
           (async () => {
             let offer = data;
-            if (!data.group && user?.user_id) {
+            if (user?.user_id) {
               try {
                 offer = await unpackIncomingSignaling(data, {
                   myUserId: user.user_id,
@@ -432,7 +463,7 @@ export default function ChatHome() {
         } else if (['call-answer', 'ice-candidate', 'call-end', 'call-reject'].includes(data.type)) {
           (async () => {
             let signal = data;
-            if (!data.group && user?.user_id && data.type !== 'call-end' && data.type !== 'call-reject') {
+            if (user?.user_id && data.type !== 'call-end' && data.type !== 'call-reject') {
               try {
                 signal = await unpackIncomingSignaling(data, {
                   myUserId: user.user_id,
@@ -460,14 +491,30 @@ export default function ChatHome() {
     (async () => {
       try {
         const { data } = await api.get(`/conversations/${activeId}/messages`);
-        setMessages(data);
+        const visible = [];
+        for (const msg of data) {
+          if (msg?.message_type === SKDM_MESSAGE_TYPE) {
+            processIncomingSkdmMessage(msg, {
+              myUserId: user?.user_id,
+              peerUserId: peer?.user_id,
+            }).catch(() => {});
+          } else if (msg?.message_type === STATUS_SKDM_MESSAGE_TYPE) {
+            processIncomingStatusSkdmMessage(msg, {
+              myUserId: user?.user_id,
+              peerUserId: msg.sender_id !== user?.user_id ? msg.sender_id : peer?.user_id,
+            }).catch(() => {});
+          } else {
+            visible.push(msg);
+          }
+        }
+        setMessages(visible);
         const { data: rs } = await api.get(`/conversations/${activeId}/reads`);
         setReads(rs);
         // mark as read
         try { await api.post('/messages/read', { conversation_id: activeId }); } catch {}
       } catch {}
     })();
-  }, [activeId]);
+  }, [activeId, user?.user_id, peer?.user_id]);
 
   // Engine 8.4 — establish X3DH session when opening a 1:1 chat (Android native)
   useEffect(() => {
@@ -483,11 +530,13 @@ export default function ChatHome() {
         if (!cancelled) setEncryptionHint(null);
         return;
       }
-      const hint = await resolveOutgoingEncryptionHint({ isGroup, peer, user });
+      const hint = await resolveOutgoingEncryptionHint({
+        isGroup, peer, user, members: activeConv?.members || [],
+      });
       if (!cancelled) setEncryptionHint(hint);
     })();
     return () => { cancelled = true; };
-  }, [activeId, isGroup, peer, user]);
+  }, [activeId, isGroup, peer, user, activeConv?.members]);
 
   // Mark new incoming messages as read when the chat is open
   useEffect(() => {
@@ -546,20 +595,57 @@ export default function ChatHome() {
     try {
       const useSignal = await shouldSendWithSignal({
         isGroup,
-        attachmentId,
-        messageType: type,
         peer,
         user,
+        members: activeConv?.members || [],
       });
 
-      if (useSignal) {
-        const enc = await encryptSignalText(peer.user_id, user.user_id, text || '');
+      if (useSignal && isGroup) {
+        await ensureGroupSenderKeysDistributed({
+          conversationId: activeId,
+          members: activeConv.members || [],
+          ourUserId: user.user_id,
+        });
+        let enc;
+        if (attachmentId && attachmentEnc?.signal_meta) {
+          const { buildSignalAttachmentEnvelope } = await import('../lib/signal/attachments');
+          enc = await encryptGroupText(
+            activeId,
+            user.user_id,
+            buildSignalAttachmentEnvelope(attachmentEnc.signal_meta),
+          );
+        } else {
+          enc = await encryptGroupText(activeId, user.user_id, text || '');
+        }
+        await api.post('/messages', {
+          conversation_id: activeId,
+          protocol: ProtocolVersion.SIGNAL_GROUP_V1,
+          ciphertext: enc.ciphertext,
+          signal_message_type: enc.signal_message_type,
+          distribution_id: enc.distribution_id,
+          message_type: type,
+          attachment_id: attachmentId || undefined,
+          attachment_content_type: attachmentEnc?.content_type,
+        });
+        setDraft('');
+        return;
+      }
+
+      if (useSignal && !isGroup) {
+        let enc;
+        if (attachmentId && attachmentEnc?.signal_meta) {
+          enc = await encryptSignalAttachment(peer.user_id, user.user_id, attachmentEnc.signal_meta);
+        } else {
+          enc = await encryptSignalText(peer.user_id, user.user_id, text || '');
+        }
         await api.post('/messages', {
           conversation_id: activeId,
           protocol: ProtocolVersion.SIGNAL_V1,
           ciphertext: enc.ciphertext,
           signal_message_type: enc.signal_message_type,
           message_type: type,
+          attachment_id: attachmentId || undefined,
+          attachment_content_type: attachmentEnc?.content_type,
         });
         setDraft('');
         return;
@@ -589,24 +675,55 @@ export default function ChatHome() {
   };
 
   const uploadEncryptedAttachment = async (blob, filename, mimeType) => {
-    const recipients = recipientsForActive;
-    if (Object.keys(recipients).length < 2) {
-      throw new Error('No recipients have encryption keys yet');
-    }
     const raw = await blob.arrayBuffer();
-    const enc = await encryptBytesForRecipients(raw, recipients);
+    const useSignal = await shouldSendWithSignal({
+      isGroup,
+      peer,
+      user,
+      members: activeConv?.members || [],
+    });
+
+    let enc;
+    if (useSignal) {
+      enc = await encryptAttachmentBytes(raw);
+    } else {
+      const recipients = recipientsForActive;
+      if (Object.keys(recipients).length < 2) {
+        throw new Error('No recipients have encryption keys yet');
+      }
+      enc = await encryptBytesForRecipients(raw, recipients);
+    }
+
     const cipherBlob = new Blob([b64ToBytes(enc.ciphertext)], { type: 'application/octet-stream' });
     const form = new FormData();
     form.append('file', cipherBlob, `${filename}.enc`);
     form.append('encrypted', 'true');
     if (mimeType) form.append('original_content_type', mimeType);
     const { data } = await api.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const contentType = mimeType || 'application/octet-stream';
+
+    if (useSignal) {
+      return {
+        fileId: data.file_id,
+        attachmentEnc: {
+          content_type: contentType,
+          signal_meta: {
+            file_id: data.file_id,
+            iv: enc.iv,
+            key: enc.key,
+            content_type: contentType,
+            caption: filename,
+          },
+        },
+      };
+    }
+
     return {
       fileId: data.file_id,
       attachmentEnc: {
         iv: enc.iv,
         encrypted_keys: enc.encrypted_keys,
-        content_type: mimeType || 'application/octet-stream',
+        content_type: contentType,
       },
     };
   };
@@ -912,7 +1029,9 @@ export default function ChatHome() {
                             onClick={() => {
                               setChatMenuOpen(false);
                               setAutoTranslate((v) => {
-                                if (!v) toast.warning(t('autoTranslateWarning'));
+                                if (!v) {
+                                  toast.info(translationOnDevice ? t('autoTranslateOnDevice') : t('autoTranslateWarning'));
+                                }
                                 return !v;
                               });
                             }}
@@ -975,7 +1094,9 @@ export default function ChatHome() {
                     {showTranslateControls && (
                       <button onClick={() => {
                         setAutoTranslate((v) => {
-                          if (!v) toast.warning(t('autoTranslateWarning'));
+                          if (!v) {
+                            toast.info(translationOnDevice ? t('autoTranslateOnDevice') : t('autoTranslateWarning'));
+                          }
                           return !v;
                         });
                       }} data-testid="toggle-autotranslate"
@@ -1013,6 +1134,8 @@ export default function ChatHome() {
                   privateKey={privateKey}
                   autoTranslate={translationEnabled && autoTranslate && !sameLangAsPeer}
                   translationEnabled={translationEnabled}
+                  translationOnDevice={translationOnDevice}
+                  serverTranslationAllowed={serverTranslationAllowed}
                   targetLang={user?.language || 'en'}
                   sourceLang={peer?.language}
                   reads={reads}
@@ -1243,7 +1366,8 @@ export default function ChatHome() {
       {groupCallState && groupCallState.direction !== 'incoming' && (
         <GroupCallModal mode={groupCallState.mode}
           direction={groupCallState.direction === 'incoming-accepted' ? 'incoming' : 'outgoing'}
-          members={groupCallState.members} me={user} socket={socketRef.current} signal={groupCallState.signal}
+          members={groupCallState.members} me={user} user={user}
+          conversationId={activeId} socket={socketRef.current} signal={groupCallState.signal}
           onClose={() => setGroupCallState(null)} />
       )}
     </div>

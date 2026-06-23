@@ -156,6 +156,7 @@ const STRINGS = {
     requestSentLabel: 'Request sent',
     initializing: 'INITIALIZING SECURE CHANNEL…',
     autoTranslateWarning: 'Auto-translate sends decrypted text to the server — not fully private E2E.',
+    autoTranslateOnDevice: 'Auto-translate runs on your phone (ML Kit) — decrypted text stays on-device.',
 
     // Settings
     settings: 'Settings',
@@ -370,6 +371,7 @@ const STRINGS = {
     requestSentLabel: 'Solicitud enviada',
     initializing: 'INICIANDO CANAL SEGURO…',
     autoTranslateWarning: 'Auto-traducción envía texto descifrado al servidor — no es E2E total.',
+    autoTranslateOnDevice: 'Auto-traducción en tu teléfono (ML Kit) — el texto no sale del dispositivo.',
 
     settings: 'Ajustes',
     settingsLanguage: 'Idioma de la app',
@@ -580,6 +582,7 @@ const STRINGS = {
     requestSentLabel: 'Cerere trimisă',
     initializing: 'INIȚIALIZARE_CANAL_SECURIZAT…',
     autoTranslateWarning: 'Auto-traducerea trimite text decriptat la server — nu e E2E complet.',
+    autoTranslateOnDevice: 'Auto-traducerea rulează pe telefon (ML Kit) — textul rămâne pe dispozitiv.',
 
     settings: 'Setări',
     settingsLanguage: 'Limba aplicației',

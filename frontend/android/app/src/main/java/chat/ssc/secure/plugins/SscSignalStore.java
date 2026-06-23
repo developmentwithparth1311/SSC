@@ -15,6 +15,8 @@ import org.signal.libsignal.protocol.state.KyberPreKeyRecord;
 import org.signal.libsignal.protocol.state.PreKeyRecord;
 import org.signal.libsignal.protocol.state.SessionRecord;
 import org.signal.libsignal.protocol.state.SignedPreKeyRecord;
+import org.signal.libsignal.protocol.groups.state.SenderKeyRecord;
+import org.signal.libsignal.protocol.groups.state.SenderKeyStore;
 import org.signal.libsignal.protocol.state.impl.InMemorySignalProtocolStore;
 import org.signal.libsignal.protocol.util.KeyHelper;
 
@@ -22,12 +24,13 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Persistent libsignal protocol store — Engine 8.4.
  * Identity, prekeys, and X3DH session records stay on device only.
  */
-public class SscSignalStore {
+public class SscSignalStore implements SenderKeyStore {
 
     private static final String PREFS_NAME = "ssc_signal_store_v1";
     private static final int ONE_TIME_PREKEY_COUNT = 20;
@@ -194,6 +197,30 @@ public class SscSignalStore {
         persistSessions();
     }
 
+    @Override
+    public void storeSenderKey(SignalProtocolAddress sender, UUID distributionId, SenderKeyRecord record) {
+        prefs.edit()
+                .putString(senderKeyKey(sender.getName(), distributionId), encode(record.serialize()))
+                .apply();
+    }
+
+    @Override
+    public SenderKeyRecord loadSenderKey(SignalProtocolAddress sender, UUID distributionId) {
+        String raw = prefs.getString(senderKeyKey(sender.getName(), distributionId), null);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return new SenderKeyRecord(decode(raw));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public boolean hasSenderKey(String senderUserId, UUID distributionId) {
+        return loadSenderKey(new SignalProtocolAddress(senderUserId, 1), distributionId) != null;
+    }
+
     public List<Integer> getPreKeyIds() throws JSONException {
         String raw = prefs.getString("prekey_ids", "[]");
         JSONArray arr = new JSONArray(raw);
@@ -210,6 +237,10 @@ public class SscSignalStore {
 
     private static String preKeyKey(int id) {
         return "prekey_" + id;
+    }
+
+    private static String senderKeyKey(String senderId, UUID distributionId) {
+        return "sender_key_" + senderId + "_" + distributionId.toString();
     }
 
     private static String encode(byte[] data) {

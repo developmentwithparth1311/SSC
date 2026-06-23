@@ -77,10 +77,6 @@ def validate_signaling_relay(data: Dict[str, Any]) -> Dict[str, Any]:
     if msg_type in CONTROL_SIGNALING_TYPES:
         return data
 
-    if data.get("group"):
-        _validate_legacy_payload(msg_type, data)
-        return data
-
     proto = normalize_signaling_protocol(data.get("signaling_protocol"))
     if proto == SignalingProtocol.SIGNAL_V1.value:
         return _validate_signal_v1_payload(data)
@@ -94,6 +90,4 @@ def validate_signaling_relay(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def server_sees_signaling_plaintext(protocol: Optional[str], *, is_group: bool) -> bool:
     """True when SDP/ICE may traverse the server in cleartext."""
-    if is_group:
-        return True
     return normalize_signaling_protocol(protocol) != SignalingProtocol.SIGNAL_V1.value

@@ -75,6 +75,19 @@ ENFORCEMENT_PATHS_87: Tuple[str, ...] = (
     "frontend/src/lib/signal/webrtcSignaling.js",
 )
 
+ENFORCEMENT_PATHS_89: Tuple[str, ...] = (
+    "frontend/src/lib/signal/attachments.js",
+)
+
+ENFORCEMENT_PATHS_811: Tuple[str, ...] = (
+    "frontend/src/lib/signal/groupMessages.js",
+)
+
+ENFORCEMENT_PATHS_812: Tuple[str, ...] = (
+    "backend/core/signal_status_policy.py",
+    "frontend/src/lib/signal/statuses.js",
+)
+
 ENFORCEMENT_PATHS_82: Tuple[str, ...] = (
     "frontend/src/lib/safetyNumber.js",
     "frontend/src/lib/identityKey.js",
@@ -91,6 +104,9 @@ ENGINE8_ALL_ENFORCEMENT_PATHS: Tuple[str, ...] = (
     *ENFORCEMENT_PATHS_85,
     *ENFORCEMENT_PATHS_86,
     *ENFORCEMENT_PATHS_87,
+    *ENFORCEMENT_PATHS_89,
+    *ENFORCEMENT_PATHS_811,
+    *ENFORCEMENT_PATHS_812,
 )
 
 
@@ -175,12 +191,12 @@ def _check_open_gaps_documented() -> ProofCheck:
 
 def _check_engine8_steps_registry() -> ProofCheck:
     ids = [s[0] for s in ENGINE8_STEPS]
-    ok = ids == ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8"]
+    ok = ids == ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8", "8.9", "8.11", "8.12"]
     done_81 = any(s[0] == "8.1" and s[2] for s in ENGINE8_STEPS)
     return ProofCheck(
         name="engine8_steps_registry",
         passed=ok and done_81,
-        detail="8.1–8.8 registered; 8.1 marked done" if ok and done_81 else "step registry mismatch",
+        detail="8.1–8.11 registered; 8.1 marked done" if ok and done_81 else "step registry mismatch",
     )
 
 
@@ -598,6 +614,129 @@ def run_signal_proof_step_88() -> SignalProofReport:
     return SignalProofReport(checks=checks)
 
 
+def _check_step_89_files() -> ProofCheck:
+    missing = [p for p in ENFORCEMENT_PATHS_89 if not (REPO_ROOT / p).is_file()]
+    ok = not missing
+    return ProofCheck(
+        name="engine8_step_89_files",
+        passed=ok,
+        detail="8.9 Signal attachment modules present" if ok else f"missing: {missing}",
+    )
+
+
+def _check_step_89_migration() -> ProofCheck:
+    migration = (REPO_ROOT / "frontend/src/lib/signal/migration.js").read_text(encoding="utf-8")
+    ok = "shouldSendWithSignal" in migration and "isSignalAttachmentEnvelope" in migration
+    return ProofCheck(
+        name="engine8_step_89_migration",
+        passed=ok,
+        detail="8.9 attachments enabled in migration send path" if ok else "attachment migration missing",
+    )
+
+
+def _check_step_89() -> ProofCheck:
+    from core.signal_policy import ENGINE8_STEPS
+
+    ok = any(s[0] == "8.9" and s[2] for s in ENGINE8_STEPS)
+    return ProofCheck(
+        name="engine8_step_89",
+        passed=ok,
+        detail="8.9 Signal 1:1 attachments complete" if ok else "8.9 not marked done",
+    )
+
+
+def run_signal_proof_step_89() -> SignalProofReport:
+    checks = run_signal_proof_step_88().checks + [
+        _check_step_89_files(),
+        _check_step_89_migration(),
+        _check_step_89(),
+    ]
+    return SignalProofReport(checks=checks)
+
+
+def _check_step_811_files() -> ProofCheck:
+    missing = [p for p in ENFORCEMENT_PATHS_811 if not (REPO_ROOT / p).is_file()]
+    plugin = (REPO_ROOT / "frontend/android/app/src/main/java/chat/ssc/secure/plugins/SscLibsignalPlugin.java").read_text(encoding="utf-8")
+    ok = not missing and "encryptGroupMessage" in plugin and "GroupCipher" in plugin
+    return ProofCheck(
+        name="engine8_step_811_files",
+        passed=ok,
+        detail="8.11 group sender key modules present" if ok else "group sender key modules missing",
+    )
+
+
+def _check_step_811_policy() -> ProofCheck:
+    policy = (REPO_ROOT / "backend/core/signal_message_policy.py").read_text(encoding="utf-8")
+    ok = "signal_group_v1" in policy and "ALLOWED_GROUP_SIGNAL_MESSAGE_TYPES" in policy
+    return ProofCheck(
+        name="engine8_step_811_policy",
+        passed=ok,
+        detail="8.11 signal_group_v1 backend policy present" if ok else "group policy missing",
+    )
+
+
+def _check_step_811() -> ProofCheck:
+    from core.signal_policy import ENGINE8_STEPS
+
+    ok = any(s[0] == "8.11" and s[2] for s in ENGINE8_STEPS)
+    return ProofCheck(
+        name="engine8_step_811",
+        passed=ok,
+        detail="8.11 Group Sender Keys complete" if ok else "8.11 not marked done",
+    )
+
+
+def run_signal_proof_step_811() -> SignalProofReport:
+    checks = run_signal_proof_step_89().checks + [
+        _check_step_811_files(),
+        _check_step_811_policy(),
+        _check_step_811(),
+    ]
+    return SignalProofReport(checks=checks)
+
+
+def _check_step_812_files() -> ProofCheck:
+    missing = [p for p in ENFORCEMENT_PATHS_812 if not (REPO_ROOT / p).is_file()]
+    stories = (REPO_ROOT / "frontend/src/components/Stories.jsx").read_text(encoding="utf-8")
+    ok = not missing and "encryptStatusText" in stories and "decryptStatusText" in stories
+    return ProofCheck(
+        name="engine8_step_812_files",
+        passed=ok,
+        detail="8.12 stories Signal modules present" if ok else "stories Signal modules missing",
+    )
+
+
+def _check_step_812_policy() -> ProofCheck:
+    policy = (REPO_ROOT / "backend/core/signal_status_policy.py").read_text(encoding="utf-8")
+    router = (REPO_ROOT / "backend/routers/statuses.py").read_text(encoding="utf-8")
+    ok = "signal_status_v1" in policy and "validate_status_payload" in router
+    return ProofCheck(
+        name="engine8_step_812_policy",
+        passed=ok,
+        detail="8.12 signal_status_v1 backend policy + router wired" if ok else "status policy missing",
+    )
+
+
+def _check_step_812() -> ProofCheck:
+    from core.signal_policy import ENGINE8_STEPS
+
+    ok = any(s[0] == "8.12" and s[2] for s in ENGINE8_STEPS)
+    return ProofCheck(
+        name="engine8_step_812",
+        passed=ok,
+        detail="8.12 Stories Signal encryption complete" if ok else "8.12 not marked done",
+    )
+
+
+def run_signal_proof_step_812() -> SignalProofReport:
+    checks = run_signal_proof_step_811().checks + [
+        _check_step_812_files(),
+        _check_step_812_policy(),
+        _check_step_812(),
+    ]
+    return SignalProofReport(checks=checks)
+
+
 def run_signal_proof() -> SignalProofReport:
-    """Full Engine 8 sign-off proof (Step 8.8)."""
-    return run_signal_proof_step_88()
+    """Full Engine 8 sign-off proof (through 8.12)."""
+    return run_signal_proof_step_812()

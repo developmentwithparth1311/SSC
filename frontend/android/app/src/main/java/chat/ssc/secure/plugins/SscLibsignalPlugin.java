@@ -16,8 +16,11 @@ import org.signal.libsignal.protocol.IdentityKeyPair;
 import org.signal.libsignal.protocol.SessionBuilder;
 import org.signal.libsignal.protocol.SessionCipher;
 import org.signal.libsignal.protocol.SignalProtocolAddress;
+import org.signal.libsignal.protocol.groups.GroupCipher;
+import org.signal.libsignal.protocol.groups.GroupSessionBuilder;
 import org.signal.libsignal.protocol.message.CiphertextMessage;
 import org.signal.libsignal.protocol.message.PreKeySignalMessage;
+import org.signal.libsignal.protocol.message.SenderKeyDistributionMessage;
 import org.signal.libsignal.protocol.message.SignalMessage;
 import org.signal.libsignal.protocol.ecc.ECPublicKey;
 import org.signal.libsignal.protocol.kem.KEMPublicKey;
@@ -28,6 +31,7 @@ import org.signal.libsignal.protocol.state.SignedPreKeyRecord;
 import org.signal.libsignal.protocol.state.impl.InMemorySignalProtocolStore;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 /**
  * Official libsignal-android (org.signal:libsignal-android) — Engine 8.3–8.5.
@@ -244,6 +248,134 @@ public class SscLibsignalPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("decryptSignalMessage failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void createGroupSenderKeyDistribution(PluginCall call) {
+        try {
+            String ourUserId = call.getString("our_user_id");
+            String distributionIdStr = call.getString("distribution_id");
+            if (ourUserId == null || ourUserId.isEmpty()) {
+                call.reject("our_user_id required");
+                return;
+            }
+            if (distributionIdStr == null || distributionIdStr.isEmpty()) {
+                call.reject("distribution_id required");
+                return;
+            }
+            UUID distributionId = UUID.fromString(distributionIdStr);
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.ensureLocalKeys();
+            SignalProtocolAddress localAddress = new SignalProtocolAddress(ourUserId, 1);
+            GroupSessionBuilder builder = new GroupSessionBuilder(store);
+            SenderKeyDistributionMessage skdm = builder.create(localAddress, distributionId);
+
+            JSObject ret = new JSObject();
+            ret.put("skdm", b64(skdm.serialize()));
+            ret.put("distribution_id", distributionIdStr);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("createGroupSenderKeyDistribution failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void processGroupSenderKeyDistribution(PluginCall call) {
+        try {
+            String senderUserId = call.getString("sender_user_id");
+            String skdmB64 = call.getString("skdm");
+            if (senderUserId == null || senderUserId.isEmpty()) {
+                call.reject("sender_user_id required");
+                return;
+            }
+            if (skdmB64 == null || skdmB64.isEmpty()) {
+                call.reject("skdm required");
+                return;
+            }
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.ensureLocalKeys();
+            SignalProtocolAddress senderAddress = new SignalProtocolAddress(senderUserId, 1);
+            SenderKeyDistributionMessage skdm = new SenderKeyDistributionMessage(decode(skdmB64));
+            GroupSessionBuilder builder = new GroupSessionBuilder(store);
+            builder.process(senderAddress, skdm);
+
+            JSObject ret = new JSObject();
+            ret.put("processed", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("processGroupSenderKeyDistribution failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void hasGroupSenderKey(PluginCall call) {
+        try {
+            String senderUserId = call.getString("sender_user_id");
+            String distributionIdStr = call.getString("distribution_id");
+            if (senderUserId == null || distributionIdStr == null) {
+                call.reject("sender_user_id and distribution_id required");
+                return;
+            }
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.ensureLocalKeys();
+            boolean has = store.hasSenderKey(senderUserId, UUID.fromString(distributionIdStr));
+            JSObject ret = new JSObject();
+            ret.put("has_sender_key", has);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("hasGroupSenderKey failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void encryptGroupMessage(PluginCall call) {
+        try {
+            String ourUserId = call.getString("our_user_id");
+            String distributionIdStr = call.getString("distribution_id");
+            String plaintext = call.getString("plaintext");
+            if (ourUserId == null || distributionIdStr == null || plaintext == null) {
+                call.reject("our_user_id, distribution_id, and plaintext required");
+                return;
+            }
+            UUID distributionId = UUID.fromString(distributionIdStr);
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.ensureLocalKeys();
+            SignalProtocolAddress localAddress = new SignalProtocolAddress(ourUserId, 1);
+            GroupCipher cipher = new GroupCipher(store, localAddress);
+            CiphertextMessage encrypted = cipher.encrypt(distributionId, plaintext.getBytes(StandardCharsets.UTF_8));
+
+            JSObject ret = new JSObject();
+            ret.put("protocol", "signal_group_v1");
+            ret.put("ciphertext", b64(encrypted.serialize()));
+            ret.put("signal_message_type", encrypted.getType());
+            ret.put("distribution_id", distributionIdStr);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("encryptGroupMessage failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void decryptGroupMessage(PluginCall call) {
+        try {
+            String senderUserId = call.getString("sender_user_id");
+            String ciphertextB64 = call.getString("ciphertext");
+            if (senderUserId == null || ciphertextB64 == null) {
+                call.reject("sender_user_id and ciphertext required");
+                return;
+            }
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.ensureLocalKeys();
+            SignalProtocolAddress senderAddress = new SignalProtocolAddress(senderUserId, 1);
+            GroupCipher cipher = new GroupCipher(store, senderAddress);
+            byte[] plain = cipher.decrypt(decode(ciphertextB64));
+
+            JSObject ret = new JSObject();
+            ret.put("plaintext", new String(plain, StandardCharsets.UTF_8));
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("decryptGroupMessage failed: " + e.getMessage(), e);
         }
     }
 

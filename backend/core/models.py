@@ -58,6 +58,7 @@ class SendMessageIn(BaseModel):
     iv: Optional[str] = None
     encrypted_keys: Optional[Dict[str, str]] = None
     signal_message_type: Optional[int] = None
+    distribution_id: Optional[str] = None
     message_type: str = "text"
     attachment_id: Optional[str] = None
     attachment_iv: Optional[str] = None
@@ -108,9 +109,12 @@ class FriendRequestActionIn(BaseModel):
 
 
 class CreateStatusIn(BaseModel):
+    protocol: str = "legacy_rsa"
     ciphertext: str
-    iv: str
-    encrypted_keys: Dict[str, str]
+    iv: Optional[str] = None
+    encrypted_keys: Optional[Dict[str, str]] = None
+    signal_message_type: Optional[int] = None
+    distribution_id: Optional[str] = None
     status_type: str = "text"
     attachment_id: Optional[str] = None
     background: Optional[str] = "#1E2A38"

@@ -27,7 +27,9 @@ SSC currently runs **two systems in parallel** during migration:
 | Layer | Algorithm | Used for |
 |-------|-----------|----------|
 | **Legacy RSA** | RSA-OAEP 2048 + AES-256-GCM per message | Web/PWA, groups, attachments, stories, old messages, account registration |
-| **Signal `signal_v1`** | X3DH + Double Ratchet (libsignal 0.96.2) | Android APK: 1:1 text + 1:1 call signaling when both peers ready |
+| **Signal `signal_v1`** | X3DH + Double Ratchet (libsignal 0.96.2) | Android APK: 1:1 text, attachments, call signaling when both peers ready |
+| **Signal `signal_group_v1`** | Sender Keys (libsignal 0.96.2) | Android APK: group messages when all members have 1:1 sessions |
+| **Signal `signal_status_v1`** | Sender Keys (libsignal 0.96.2) | Android APK: stories to contacts when sessions ready |
 
 UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 
@@ -41,11 +43,13 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 |---------|------------|----------|
 | 1:1 text | ✅ Ratchet | `signal_v1` when both peers have prekeys + session |
 | 1:1 text fallback | ✅ E2E | `legacy_rsa` (peer not upgraded, no session) |
-| 1:1 attachments | ✅ E2E | `legacy_rsa` only — **not ratchet yet** |
-| Group messages | ✅ E2E | `legacy_rsa` per recipient — **no Sender Keys** |
+| 1:1 attachments | ✅ Ratchet | `signal_v1` when session ready; else `legacy_rsa` |
+| Group messages | ✅ Sender Keys | `signal_group_v1` when all members ready; else `legacy_rsa` |
 | 1:1 call signaling (SDP/ICE) | ✅ Ratchet-wrapped | `signaling_protocol: signal_v1` |
-| Group call signaling | ⚠️ Server relays cleartext SDP/ICE | Legacy (deferred) |
+| Group call signaling | ✅ Sender Keys wrap | Legacy fallback |
+| Stories / statuses | ✅ Sender Keys | `legacy_rsa` fallback |
 | Call media (audio/video) | ✅ P2P WebRTC | Encrypted by DTLS-SRTP between peers |
+| Translation | ✅ On-device | Google ML Kit — plaintext never leaves phone |
 
 ### Web / PWA
 
@@ -53,6 +57,7 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 |---------|------------|----------|
 | All messaging | ✅ E2E | `legacy_rsa` only — **no libsignal on web** |
 | Call signaling | ⚠️ Cleartext on server relay | Legacy |
+| Translation | ❌ Off by default | Server path only if explicitly enabled (dev) |
 
 ---
 
@@ -62,11 +67,9 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 
 **Not yet on Signal (planned):**
 
-1. 1:1 attachments  
-2. Web/PWA clients  
-3. Group messages (Sender Keys)  
-4. Group call signaling  
-5. Stories/statuses  
+1. Web/PWA clients (official libsignal is Node-native — no browser WASM yet)  
+2. Group call signaling encryption  
+3. Web/PWA clients (no official browser libsignal bindings)
 
 **Will stay RSA-based:** Account vault unlock (password → private key). That is identity/key-wrapping, not message transport — same pattern Signal uses for local PIN/biometric protection.
 
@@ -82,7 +85,8 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 | Group call signaling | SDP + ICE (cleartext) |
 | Contacts | Who is friends with whom (persistent) |
 | Push | Generic body; routing metadata (tokens, conversation_id) |
-| Translation (if enabled) | **Plaintext** — disabled by default |
+| Translation (Android APK) | **On-device only** (ML Kit) — decrypted text never sent to server |
+| Translation (web, dev only) | **Plaintext** if `TRANSLATION_ENABLED=true` — off in production |
 
 ---
 
@@ -111,7 +115,7 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 | libsignal | Official `@signalapp` / `org.signal` only · **AGPL-3.0** — legal review before public Play |
 | Google OAuth / FCM / Firebase | Configured · project `super-chat-b0992` |
 | Mongo Atlas | Production database |
-| Translation | MyMemory / Google — **opt-in E2E break** |
+| Translation | Android: Google ML Kit on-device · Server: MyMemory (dev only, disabled in prod) |
 
 ---
 

@@ -72,3 +72,73 @@ def test_legacy_requires_keys():
 def test_validate_signal_ciphertext_bounds():
     with pytest.raises(SignalMessageValidationError):
         validate_signal_ciphertext("!!!")
+
+
+def test_signal_v1_rejects_attachment_rsa_fields():
+    with pytest.raises(SignalMessageValidationError, match="attachment_iv"):
+        validate_send_payload(
+            protocol="signal_v1",
+            ciphertext=_cipher_b64(),
+            iv=None,
+            encrypted_keys=None,
+            signal_message_type=2,
+            is_group=False,
+            participant_ids=["a", "b"],
+            attachment_id="f_abc",
+            attachment_iv="aXY=",
+        )
+    with pytest.raises(SignalMessageValidationError, match="attachment_encrypted_keys"):
+        validate_send_payload(
+            protocol="signal_v1",
+            ciphertext=_cipher_b64(),
+            iv=None,
+            encrypted_keys=None,
+            signal_message_type=2,
+            is_group=False,
+            participant_ids=["a", "b"],
+            attachment_id="f_abc",
+            attachment_encrypted_keys={"a": "k"},
+        )
+
+
+def test_signal_v1_allows_attachment_id_only():
+    out = validate_send_payload(
+        protocol="signal_v1",
+        ciphertext=_cipher_b64(),
+        iv=None,
+        encrypted_keys=None,
+        signal_message_type=2,
+        is_group=False,
+        participant_ids=["a", "b"],
+        attachment_id="f_abc123",
+    )
+    assert out["protocol"] == ProtocolVersion.SIGNAL_V1.value
+
+
+def test_signal_group_v1_payload_ok():
+    out = validate_send_payload(
+        protocol="signal_group_v1",
+        ciphertext=_cipher_b64(),
+        iv=None,
+        encrypted_keys=None,
+        signal_message_type=7,
+        is_group=True,
+        participant_ids=["a", "b", "c"],
+        distribution_id="550e8400-e29b-41d4-a716-446655440000",
+    )
+    assert out["protocol"] == ProtocolVersion.SIGNAL_GROUP_V1.value
+    assert out["signal_message_type"] == 7
+
+
+def test_signal_group_v1_rejects_dm():
+    with pytest.raises(SignalMessageValidationError, match="group"):
+        validate_send_payload(
+            protocol="signal_group_v1",
+            ciphertext=_cipher_b64(),
+            iv=None,
+            encrypted_keys=None,
+            signal_message_type=7,
+            is_group=False,
+            participant_ids=["a", "b"],
+            distribution_id="550e8400-e29b-41d4-a716-446655440000",
+        )

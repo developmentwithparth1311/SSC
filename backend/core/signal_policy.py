@@ -16,6 +16,8 @@ from core.session_policy import engine5_complete
 class ProtocolVersion(str, Enum):
     LEGACY_RSA = "legacy_rsa"
     SIGNAL_V1 = "signal_v1"
+    SIGNAL_GROUP_V1 = "signal_group_v1"
+    SIGNAL_STATUS_V1 = "signal_status_v1"
 
 
 class GapSeverity(str, Enum):
@@ -90,6 +92,9 @@ ENGINE8_STEPS: List[Tuple[str, str, bool]] = [
     ("8.6", "Legacy RSA dual-read + migration UX", True),
     ("8.7", "WebRTC signaling encrypted (G6)", True),
     ("8.8", "Engine 8 test gate + integration proof", True),
+    ("8.9", "Signal 1:1 attachments (Android)", True),
+    ("8.11", "Group Sender Keys (signal_group_v1)", True),
+    ("8.12", "Stories Signal encryption (signal_status_v1)", True),
 ]
 
 PUBLIC_PREKEY_FIELDS: frozenset[str] = frozenset({
@@ -145,7 +150,7 @@ ENGINE8_V1_SCOPE: Tuple[str, ...] = (
 )
 
 ENGINE8_DEFERRED: Tuple[str, ...] = (
-    "group_sender_keys",
+    "signal_web_wasm",
     "multi_device_sync",
     "sealed_sender",
     "post_quantum_pqxdh",

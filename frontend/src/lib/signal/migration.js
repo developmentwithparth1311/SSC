@@ -4,6 +4,15 @@
 import { decryptMessage } from '../crypto';
 import { ProtocolVersion } from './constants';
 import {
+  isSignalAttachmentEnvelope,
+  parseSignalAttachmentEnvelope,
+} from './attachments';
+import {
+  canUseSignalGroupMessaging,
+  decryptGroupText,
+  isSignalGroupV1Message,
+} from './groupMessages';
+import {
   canUseSignalMessaging,
   decryptSignalText,
   isSignalV1Message,
@@ -24,10 +33,25 @@ export async function decryptMessageBody(msg, { myUserId, peerUserId, privateKey
   if (!msg?.ciphertext) {
     throw new Error('NO_CIPHERTEXT');
   }
+  if (isSignalGroupV1Message(msg)) {
+    const senderId = msg.sender_id;
+    if (!senderId || !myUserId) throw new Error('NO_KEY');
+    const plaintext = await decryptGroupText(senderId, msg);
+    if (isSignalAttachmentEnvelope(plaintext)) {
+      const meta = parseSignalAttachmentEnvelope(plaintext);
+      return meta?.caption ?? '';
+    }
+    return plaintext;
+  }
   if (isSignalV1Message(msg)) {
     const remoteId = signalRemoteUserId(msg, { myUserId, peerUserId });
     if (!remoteId || !myUserId) throw new Error('NO_KEY');
-    return decryptSignalText(remoteId, myUserId, msg);
+    const plaintext = await decryptSignalText(remoteId, myUserId, msg);
+    if (isSignalAttachmentEnvelope(plaintext)) {
+      const meta = parseSignalAttachmentEnvelope(plaintext);
+      return meta?.caption ?? '';
+    }
+    return plaintext;
   }
   if (!privateKey) throw new Error('VAULT_LOCKED');
   const myKey = msg.encrypted_keys?.[myUserId];
@@ -35,8 +59,18 @@ export async function decryptMessageBody(msg, { myUserId, peerUserId, privateKey
   return decryptMessage(privateKey, msg.ciphertext, msg.iv, myKey);
 }
 
-export async function resolveOutgoingEncryptionHint({ isGroup, peer, user }) {
+export async function resolveOutgoingEncryptionHint({ isGroup, peer, user, members }) {
   if (isGroup) {
+    if (!isNativeLibsignalAvailable()) {
+      return { mode: ProtocolVersion.LEGACY_RSA, reason: 'web_client' };
+    }
+    if (!user?.signal_prekeys_ready) {
+      return { mode: ProtocolVersion.LEGACY_RSA, reason: 'self_no_prekeys' };
+    }
+    const ready = await canUseSignalGroupMessaging(members, user?.user_id, user);
+    if (ready) {
+      return { mode: ProtocolVersion.SIGNAL_GROUP_V1, reason: null };
+    }
     return { mode: ProtocolVersion.LEGACY_RSA, reason: 'group_chat' };
   }
   if (!peer?.user_id || !user?.user_id) {
@@ -58,8 +92,11 @@ export async function resolveOutgoingEncryptionHint({ isGroup, peer, user }) {
   return { mode: ProtocolVersion.LEGACY_RSA, reason: 'no_signal_session' };
 }
 
-export async function shouldSendWithSignal({ isGroup, attachmentId, messageType, peer, user }) {
-  if (isGroup || attachmentId || messageType !== 'text') return false;
+export async function shouldSendWithSignal({ isGroup, peer, user, members }) {
+  if (isGroup) {
+    if (!user?.user_id) return false;
+    return canUseSignalGroupMessaging(members, user.user_id, user);
+  }
   if (!peer?.user_id || !user?.user_id) return false;
   if (!user.signal_prekeys_ready || !peer.signal_prekeys_ready) return false;
   return canUseSignalMessaging(peer.user_id, user.user_id, true);
@@ -68,7 +105,9 @@ export async function shouldSendWithSignal({ isGroup, attachmentId, messageType,
 /** Map outgoing hint reason → i18n key for composer banner. */
 export function encryptionHintI18nKey(hint) {
   if (!hint) return null;
-  if (hint.mode === ProtocolVersion.SIGNAL_V1) return 'encryptionHintSignal';
+  if (hint.mode === ProtocolVersion.SIGNAL_V1 || hint.mode === ProtocolVersion.SIGNAL_GROUP_V1) {
+    return 'encryptionHintSignal';
+  }
   switch (hint.reason) {
     case 'web_client': return 'encryptionHintLegacyWeb';
     case 'self_no_prekeys': return 'encryptionHintLegacySelf';

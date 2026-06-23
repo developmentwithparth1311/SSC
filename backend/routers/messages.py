@@ -48,6 +48,10 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
             signal_message_type=body.signal_message_type,
             is_group=bool(conv.get("is_group")),
             participant_ids=list(conv.get("participants") or []),
+            attachment_id=body.attachment_id,
+            attachment_iv=body.attachment_iv,
+            attachment_encrypted_keys=body.attachment_encrypted_keys,
+            distribution_id=body.distribution_id,
         )
     except SignalMessageValidationError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -68,6 +72,7 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
         "iv": normalized["iv"],
         "encrypted_keys": normalized["encrypted_keys"],
         "signal_message_type": normalized["signal_message_type"],
+        "distribution_id": normalized.get("distribution_id"),
         "message_type": body.message_type,
         "attachment_id": body.attachment_id,
         "attachment_iv": body.attachment_iv,

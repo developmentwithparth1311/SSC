@@ -3,6 +3,14 @@ import { Plus, Eye, X, Trash } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { encryptMessageForRecipients, decryptMessage } from '../lib/crypto';
+import { ProtocolVersion } from '../lib/signal/constants';
+import {
+  canUseSignalStatuses,
+  decryptStatusText,
+  ensureStatusSenderKeysDistributed,
+  encryptStatusText,
+  isSignalStatusV1,
+} from '../lib/signal/statuses';
 import { subscribeMemoryWipe } from '../lib/memoryWipe';
 
 /**
@@ -92,17 +100,40 @@ function StoryCreator({ open, onClose, me, onCreated }) {
     if (!text.trim()) return;
     setBusy(true);
     try {
-      const myPub = me.public_key ? (typeof me.public_key === 'string' ? JSON.parse(me.public_key) : me.public_key) : null;
-      const recipients = { [me.user_id]: myPub };
-      for (const c of contacts) {
-        if (c.blocked) continue; // respect block
-        if (c.public_key) recipients[c.user_id] = typeof c.public_key === 'string' ? JSON.parse(c.public_key) : c.public_key;
+      const audience = contacts.filter((c) => !c.blocked);
+      const useSignal = await canUseSignalStatuses(audience, me.user_id, me);
+
+      if (useSignal) {
+        await ensureStatusSenderKeysDistributed({
+          authorId: me.user_id,
+          contacts: audience,
+          ourUserId: me.user_id,
+        });
+        const enc = await encryptStatusText(me.user_id, me.user_id, text.trim());
+        await api.post('/statuses', {
+          protocol: ProtocolVersion.SIGNAL_STATUS_V1,
+          ciphertext: enc.ciphertext,
+          signal_message_type: enc.signal_message_type,
+          distribution_id: enc.distribution_id,
+          status_type: 'text',
+          background: bg,
+        });
+      } else {
+        const myPub = me.public_key ? (typeof me.public_key === 'string' ? JSON.parse(me.public_key) : me.public_key) : null;
+        const recipients = { [me.user_id]: myPub };
+        for (const c of audience) {
+          if (c.public_key) recipients[c.user_id] = typeof c.public_key === 'string' ? JSON.parse(c.public_key) : c.public_key;
+        }
+        const enc = await encryptMessageForRecipients(text.trim(), recipients);
+        await api.post('/statuses', {
+          protocol: ProtocolVersion.LEGACY_RSA,
+          ciphertext: enc.ciphertext,
+          iv: enc.iv,
+          encrypted_keys: enc.encrypted_keys,
+          status_type: 'text',
+          background: bg,
+        });
       }
-      const enc = await encryptMessageForRecipients(text.trim(), recipients);
-      await api.post('/statuses', {
-        ciphertext: enc.ciphertext, iv: enc.iv, encrypted_keys: enc.encrypted_keys,
-        status_type: 'text', background: bg,
-      });
       toast.success('Status posted · auto-deletes in 24h');
       onCreated && onCreated();
       onClose && onClose();
@@ -159,13 +190,19 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
   }), []);
 
   useEffect(() => {
-    if (!cur || !privateKey) return;
+    if (!cur) return;
+    if (!isSignalStatusV1(cur) && !privateKey) return;
     setDecoded('decrypting…');
     (async () => {
       try {
-        const key = cur.encrypted_keys?.[me.user_id];
-        if (!key) { setDecoded('[no key for this device]'); return; }
-        const pt = await decryptMessage(privateKey, cur.ciphertext, cur.iv, key);
+        let pt;
+        if (isSignalStatusV1(cur)) {
+          pt = await decryptStatusText(cur.author_id, cur);
+        } else {
+          const key = cur.encrypted_keys?.[me.user_id];
+          if (!key) { setDecoded('[no key for this device]'); return; }
+          pt = await decryptMessage(privateKey, cur.ciphertext, cur.iv, key);
+        }
         setDecoded(pt);
         // mark viewed
         try { await api.post('/statuses/viewed', { status_id: cur.status_id }); } catch {}

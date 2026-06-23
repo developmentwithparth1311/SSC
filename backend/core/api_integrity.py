@@ -26,7 +26,7 @@ def project_message_for_viewer(msg: dict, viewer_id: str) -> dict:
     out = dict(msg)
     protocol = normalize_message_protocol(out.get("protocol"))
     out["protocol"] = protocol
-    if protocol == "signal_v1":
+    if protocol in ("signal_v1", "signal_group_v1"):
         out.pop("encrypted_keys", None)
         out.pop("iv", None)
     else:
@@ -54,9 +54,15 @@ def project_status_for_viewer(status: dict, viewer_id: str) -> dict:
     if not status:
         return status
     out = dict(status)
-    keys = out.get("encrypted_keys") or {}
-    own = keys.get(viewer_id)
-    out["encrypted_keys"] = {viewer_id: own} if own else {}
+    protocol = normalize_message_protocol(out.get("protocol"))
+    out["protocol"] = protocol
+    if protocol == "signal_status_v1":
+        out.pop("encrypted_keys", None)
+        out.pop("iv", None)
+    else:
+        keys = out.get("encrypted_keys") or {}
+        own = keys.get(viewer_id)
+        out["encrypted_keys"] = {viewer_id: own} if own else {}
     out.pop("plaintext_length", None)
     if out.get("author_id") != viewer_id:
         out.pop("viewers", None)

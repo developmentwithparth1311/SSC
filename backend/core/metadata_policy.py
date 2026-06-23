@@ -109,7 +109,7 @@ METADATA_GAPS: List[MetadataGap] = [
         "M4", "Contacts graph is persistent server metadata", GapSeverity.MEDIUM, "4.6", resolved=False,
     ),
     MetadataGap(
-        "M5", "Translation sends plaintext to server when enabled", GapSeverity.CRITICAL, None, "9", resolved=False,
+        "M5", "Translation sends plaintext to server when enabled", GapSeverity.CRITICAL, None, "9", resolved=True,
     ),
     MetadataGap(
         "M6", "WebRTC signaling cleartext on server", GapSeverity.HIGH, None, "8", resolved=True,

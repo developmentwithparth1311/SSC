@@ -14,7 +14,13 @@ async def user_can_access_file(user_id: str, file_id: str, owner_id: str) -> boo
         if conv:
             return True
     status = await db.statuses.find_one(
-        {f"encrypted_keys.{user_id}": {"$exists": True}, "attachment_id": file_id},
-        {"_id": 1},
+        {"attachment_id": file_id},
+        {"_id": 1, "author_id": 1, "protocol": 1, "encrypted_keys": 1},
     )
-    return bool(status)
+    if not status:
+        return False
+    proto = (status.get("protocol") or "legacy_rsa").strip().lower()
+    if proto == "signal_status_v1":
+        from core.contact_helpers import are_contacts
+        return await are_contacts(user_id, status.get("author_id", ""))
+    return user_id in (status.get("encrypted_keys") or {})

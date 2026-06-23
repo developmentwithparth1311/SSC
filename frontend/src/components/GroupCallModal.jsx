@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
+import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 
 /**
  * GroupCallModal — full-mesh WebRTC for up to ~6 participants in a group.
@@ -28,7 +29,9 @@ async function getRTCConfig() {
   return { iceServers: DEFAULT_ICE, iceCandidatePoolSize: 10 };
 }
 
-export default function GroupCallModal({ mode, direction, members, me, socket, signal, onClose }) {
+export default function GroupCallModal({
+  mode, direction, members, me, user, conversationId, socket, signal, onClose,
+}) {
   // members: [{user_id, username}] EXCLUDING me
   const [peers, setPeers] = useState({}); // user_id -> { pc, stream, username }
   const peersRef = useRef({});
@@ -39,6 +42,19 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
   const [duration, setDuration] = useState(0);
   const startRef = useRef(null);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'incoming');
+
+  const signalingCtx = useMemo(() => ({
+    ourUserId: me?.user_id,
+    user,
+    isGroup: true,
+    members: [...(members || []), me].filter(Boolean),
+    conversationId,
+  }), [me, user, members, conversationId]);
+
+  const relaySignaling = async (msg) => {
+    if (!socket) return;
+    await sendSignaling(socket, { ...msg, group: true }, signalingCtx);
+  };
 
   useEffect(() => {
     setup();
@@ -56,7 +72,7 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
     const rtcConfig = await getRTCConfig();
     const pc = new RTCPeerConnection(rtcConfig);
     pc.onicecandidate = (e) => {
-      if (e.candidate) socket.send({ type: 'ice-candidate', to: peerId, candidate: e.candidate, group: true });
+      if (e.candidate) relaySignaling({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
     };
     pc.ontrack = (e) => {
       setPeers((cur) => ({ ...cur, [peerId]: { ...(cur[peerId] || {}), stream: e.streams[0], username: peerUsername } }));
@@ -87,7 +103,10 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
         const pc = await createPeerConnection(m.user_id, m.username);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        socket.send({ type: 'call-offer', to: m.user_id, mode, sdp: offer, group: true, members: members.map((mm) => ({ user_id: mm.user_id, username: mm.username })) });
+        await relaySignaling({
+          type: 'call-offer', to: m.user_id, mode, sdp: offer,
+          members: members.map((mm) => ({ user_id: mm.user_id, username: mm.username })),
+        });
       }
       setStatus('connected');
     } else if (direction === 'incoming' && signal?.from && signal?.sdp) {
@@ -96,14 +115,14 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
       await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket.send({ type: 'call-answer', to: signal.from, sdp: answer, group: true });
+      await relaySignaling({ type: 'call-answer', to: signal.from, sdp: answer });
       // ALSO initiate offers to all other members (full mesh)
       for (const m of (signal.members || [])) {
         if (m.user_id === me.user_id || m.user_id === signal.from || peersRef.current[m.user_id]) continue;
         const pc2 = await createPeerConnection(m.user_id, m.username);
         const offer = await pc2.createOffer();
         await pc2.setLocalDescription(offer);
-        socket.send({ type: 'call-offer', to: m.user_id, mode, sdp: offer, group: true });
+        await relaySignaling({ type: 'call-offer', to: m.user_id, mode, sdp: offer });
       }
       setStatus('connected');
     }
@@ -112,8 +131,16 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
   // listen for signaling
   useEffect(() => {
     const handler = async (e) => {
-      const data = e.detail;
+      let data = e.detail;
       if (!data?.group) return;
+      try {
+        data = await unpackIncomingSignaling(data, {
+          myUserId: me?.user_id,
+          peerUserId: data.from,
+        });
+      } catch {
+        return;
+      }
       const fromId = data.from;
       if (data.type === 'call-offer' && fromId !== me.user_id) {
         let entry = peersRef.current[fromId];
@@ -124,7 +151,7 @@ export default function GroupCallModal({ mode, direction, members, me, socket, s
         await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
         const answer = await entry.pc.createAnswer();
         await entry.pc.setLocalDescription(answer);
-        socket.send({ type: 'call-answer', to: fromId, sdp: answer, group: true });
+        await relaySignaling({ type: 'call-answer', to: fromId, sdp: answer });
       } else if (data.type === 'call-answer') {
         const entry = peersRef.current[fromId];
         if (entry) {

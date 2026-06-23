@@ -13,6 +13,8 @@ from core.signal_policy import ProtocolVersion
 DUAL_READ_PROTOCOLS: FrozenSet[str] = frozenset({
     ProtocolVersion.LEGACY_RSA.value,
     ProtocolVersion.SIGNAL_V1.value,
+    ProtocolVersion.SIGNAL_GROUP_V1.value,
+    ProtocolVersion.SIGNAL_STATUS_V1.value,
 })
 
 MIGRATION_CLIENT_REQUIREMENTS: Tuple[str, ...] = (

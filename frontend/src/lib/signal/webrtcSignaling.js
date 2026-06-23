@@ -3,6 +3,13 @@
  * 1:1 SDP/ICE wrapped in signal_v1 ratchet ciphertext; group calls stay legacy cleartext.
  */
 import { ProtocolVersion } from './constants';
+// SIGNAL_GROUP_V1 used for group signaling decrypt shim
+import {
+  canUseSignalGroupMessaging,
+  ensureGroupSenderKeysDistributed,
+  encryptGroupText,
+  decryptGroupText,
+} from './groupMessages';
 import { encryptSignalText, decryptSignalText, canUseSignalMessaging } from './messages';
 import { isNativeLibsignalAvailable } from './nativeLibsignal';
 
@@ -27,11 +34,15 @@ export function signalingRemoteUserId(msg, { myUserId, peerUserId }) {
   return peerUserId;
 }
 
-export async function shouldEncryptSignaling({ isGroup, peer, user }) {
-  if (isGroup) return false;
-  if (!peer?.user_id || !user?.user_id) return false;
+export async function shouldEncryptSignaling({ isGroup, peer, user, members, conversationId }) {
+  if (!user?.user_id) return false;
   if (!isNativeLibsignalAvailable()) return false;
-  if (!user.signal_prekeys_ready || !peer.signal_prekeys_ready) return false;
+  if (!user.signal_prekeys_ready) return false;
+  if (isGroup) {
+    if (!conversationId || !members?.length) return false;
+    return canUseSignalGroupMessaging(members, user.user_id, user);
+  }
+  if (!peer?.user_id || !peer.signal_prekeys_ready) return false;
   return canUseSignalMessaging(peer.user_id, user.user_id, true);
 }
 
@@ -43,21 +54,46 @@ function buildInnerPayload(msg) {
 }
 
 /** Pack outgoing WS signaling — encrypts sdp/candidate for 1:1 when session ready. */
-export async function packOutgoingSignaling(msg, { peerUserId, ourUserId, peer, user, isGroup = false }) {
+export async function packOutgoingSignaling(msg, {
+  peerUserId, ourUserId, peer, user, isGroup = false, members, conversationId,
+}) {
   if (!SENSITIVE_TYPES.has(msg?.type)) {
     return msg;
   }
-  if (isGroup) {
-    return { ...msg, signaling_protocol: SignalingProtocol.LEGACY_CLEARTEXT };
-  }
 
-  const useSignal = await shouldEncryptSignaling({ isGroup: false, peer, user });
+  const useSignal = await shouldEncryptSignaling({
+    isGroup, peer, user, members, conversationId,
+  });
   if (!useSignal) {
-    return { ...msg, signaling_protocol: SignalingProtocol.LEGACY_CLEARTEXT };
+    const legacy = { ...msg, signaling_protocol: SignalingProtocol.LEGACY_CLEARTEXT };
+    if (isGroup) legacy.group = true;
+    return legacy;
   }
 
   const inner = buildInnerPayload(msg);
-  const enc = await encryptSignalText(peerUserId, ourUserId, JSON.stringify(inner));
+  let enc;
+  if (isGroup) {
+    await ensureGroupSenderKeysDistributed({
+      conversationId,
+      members: [...(members || []), { user_id: ourUserId }],
+      ourUserId,
+    });
+    enc = await encryptGroupText(conversationId, ourUserId, JSON.stringify(inner));
+    const packed = {
+      type: msg.type,
+      to: msg.to,
+      group: true,
+      signaling_protocol: SignalingProtocol.SIGNAL_V1,
+      signaling_ciphertext: enc.ciphertext,
+      signal_message_type: enc.signal_message_type,
+      distribution_id: enc.distribution_id,
+    };
+    if (msg.mode != null) packed.mode = msg.mode;
+    if (msg.members != null) packed.members = msg.members;
+    return packed;
+  }
+
+  enc = await encryptSignalText(peerUserId, ourUserId, JSON.stringify(inner));
   const packed = {
     type: msg.type,
     to: msg.to,
@@ -89,11 +125,21 @@ export async function unpackIncomingSignaling(msg, { myUserId, peerUserId }) {
   const remoteId = signalingRemoteUserId(msg, { myUserId, peerUserId });
   if (!remoteId || !myUserId) throw new Error('NO_PEER');
 
-  const plaintext = await decryptSignalText(remoteId, myUserId, {
-    protocol: ProtocolVersion.SIGNAL_V1,
-    ciphertext: msg.signaling_ciphertext,
-    signal_message_type: msg.signal_message_type,
-  });
+  let plaintext;
+  if (msg.group) {
+    plaintext = await decryptGroupText(remoteId, {
+      protocol: ProtocolVersion.SIGNAL_GROUP_V1,
+      ciphertext: msg.signaling_ciphertext,
+      signal_message_type: msg.signal_message_type,
+      sender_id: remoteId,
+    });
+  } else {
+    plaintext = await decryptSignalText(remoteId, myUserId, {
+      protocol: ProtocolVersion.SIGNAL_V1,
+      ciphertext: msg.signaling_ciphertext,
+      signal_message_type: msg.signal_message_type,
+    });
+  }
   const inner = JSON.parse(plaintext || '{}');
   return {
     ...msg,

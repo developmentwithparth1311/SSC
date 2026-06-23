@@ -5,6 +5,7 @@ from core.config import ENV, TURNSTILE_SITEKEY, VAPID_PUBLIC
 from core.signal_policy import LIBSIGNAL_MAVEN_ARTIFACT_ANDROID, LIBSIGNAL_NPM_PACKAGE, LIBSIGNAL_PINNED_VERSION
 from core.egress_policy import build_ice_servers, egress_feature_enabled, egress_status_map, is_air_gapped_mode
 from core.translation_access import is_translation_allowed, translation_provider
+from core.translation_policy import production_translation_mode
 from security import get_rate_limit_backend
 
 router = APIRouter()
@@ -22,6 +23,8 @@ async def public_config():
         "air_gapped_mode": is_air_gapped_mode(),
         "translation_enabled": is_translation_allowed(),
         "translation_provider": translation_provider(),
+        "translation_mode": production_translation_mode().value,
+        "translation_on_device_recommended": not is_translation_allowed(),
         "rate_limit_backend": get_rate_limit_backend(),
         "ice_servers": build_ice_servers(),
         "egress": egress_status_map(),

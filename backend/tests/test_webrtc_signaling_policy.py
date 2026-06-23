@@ -91,4 +91,5 @@ def test_control_types_pass_through():
 def test_server_sees_plaintext_matrix():
     assert server_sees_signaling_plaintext("signal_v1", is_group=False) is False
     assert server_sees_signaling_plaintext("legacy_cleartext", is_group=False) is True
-    assert server_sees_signaling_plaintext("signal_v1", is_group=True) is True
+    assert server_sees_signaling_plaintext("signal_v1", is_group=True) is False
+    assert server_sees_signaling_plaintext("legacy_cleartext", is_group=True) is True

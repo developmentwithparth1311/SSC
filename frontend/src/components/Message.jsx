@@ -1,16 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Translate, Image as ImageIcon, Paperclip, Check, Checks } from '@phosphor-icons/react';
 import { decryptBytes } from '../lib/crypto';
+import {
+  decryptAttachmentBytes,
+  decryptSignalAttachmentBody,
+  isSignalV1AttachmentMessage,
+  parseSignalAttachmentEnvelope,
+} from '../lib/signal/attachments';
+import { decryptGroupText } from '../lib/signal/groupMessages';
 import { decryptMessageBody, getMessageProtocol } from '../lib/signal/migration';
-import { isSignalV1Message } from '../lib/signal/messages';
+import { isSignalV1Message, signalRemoteUserId } from '../lib/signal/messages';
 import EncryptionModeBadge from './EncryptionModeBadge';
-import { api } from '../lib/api';
+import { translateMessageText } from '../lib/translation/translateClient';
 import { fetchFileBytes } from '../lib/files';
 import { registerBlobUrl, subscribeMemoryWipe, unregisterBlobUrl } from '../lib/memoryWipe';
 import CountdownBadge from './CountdownBadge';
 
 export default function Message({
   msg, isMine, myUserId, privateKey, peerUserId = null, autoTranslate, translationEnabled = false,
+  translationOnDevice = false, serverTranslationAllowed = false,
   targetLang, sourceLang, reads = [], participantsCount = 2,
 }) {
   const [plaintext, setPlaintext] = useState(null);
@@ -71,25 +79,18 @@ export default function Message({
     if (!translationEnabled || !plaintext || translating || sameLanguage) return;
     setTranslating(true);
     try {
-      const payload = { text: plaintext, target_language: targetLang };
-      if (sourceLang) payload.source_language = sourceLang;
-      const { data } = await api.post('/translate', payload);
-      if (data.note === 'same language') {
+      const result = await translateMessageText({
+        text: plaintext,
+        sourceLang,
+        targetLang,
+        serverAllowed: serverTranslationAllowed,
+      });
+      if (result.note === 'same language' || !result.translated) {
         setTranslated(null);
         return;
       }
-      const out = data.translated;
-      const bad = !out
-        || /PLEASE SELECT TWO DISTINCT LANGUAGES/i.test(out)
-        || /MYMEMORY WARNING/i.test(out)
-        || /AUTO_DETECT LANGUAGE NOT SUPPORTED/i.test(out)
-        || data.note === 'translation service unavailable or same language';
-      if (!bad && out.toLowerCase() !== plaintext.toLowerCase()) {
-        setTranslated(out);
-        setShowTranslated(true);
-      } else {
-        setTranslated(null);
-      }
+      setTranslated(result.translated);
+      setShowTranslated(true);
     } catch {
       setTranslated(null);
     } finally {
@@ -101,7 +102,8 @@ export default function Message({
     ? 'bg-[#1E2A38] text-white rounded-md rounded-tr-sm self-end'
     : 'bg-[#232323] text-[#F0F0F0] rounded-md rounded-tl-sm self-start';
 
-  const attachmentEncrypted = Boolean(msg.attachment_iv && msg.attachment_encrypted_keys);
+  const attachmentEncrypted = isSignalV1AttachmentMessage(msg)
+    || Boolean(msg.attachment_iv && msg.attachment_encrypted_keys);
 
   return (
     <div className={`flex flex-col max-w-[78%] ${isMine ? 'self-end items-end' : 'self-start items-start'} fade-up`}>
@@ -119,19 +121,28 @@ export default function Message({
           <>
             {msg.message_type === 'image' && msg.attachment_id ? (
               attachmentEncrypted ? (
-                <EncryptedImageAttachment msg={msg} fileId={msg.attachment_id} caption={plaintext} privateKey={privateKey} myUserId={myUserId} />
+                <EncryptedImageAttachment
+                  msg={msg} fileId={msg.attachment_id} caption={plaintext}
+                  privateKey={privateKey} myUserId={myUserId} peerUserId={peerUserId}
+                />
               ) : (
                 <LegacyAttachmentPlaceholder kind="image" caption={plaintext} />
               )
             ) : msg.message_type === 'file' && msg.attachment_id ? (
               attachmentEncrypted ? (
-                <EncryptedFileAttachment msg={msg} fileId={msg.attachment_id} caption={plaintext} privateKey={privateKey} myUserId={myUserId} />
+                <EncryptedFileAttachment
+                  msg={msg} fileId={msg.attachment_id} caption={plaintext}
+                  privateKey={privateKey} myUserId={myUserId} peerUserId={peerUserId}
+                />
               ) : (
                 <LegacyAttachmentPlaceholder kind="file" caption={plaintext} />
               )
             ) : msg.message_type === 'voice' && msg.attachment_id ? (
               attachmentEncrypted ? (
-                <EncryptedVoiceAttachment msg={msg} fileId={msg.attachment_id} privateKey={privateKey} myUserId={myUserId} />
+                <EncryptedVoiceAttachment
+                  msg={msg} fileId={msg.attachment_id}
+                  privateKey={privateKey} myUserId={myUserId} peerUserId={peerUserId}
+                />
               ) : (
                 <LegacyAttachmentPlaceholder kind="voice" />
               )
@@ -169,7 +180,7 @@ export default function Message({
           return <Check size={12} className="text-[#A1A1AA]" data-testid={`delivered-${msg.message_id}`} title="Sent" />;
         })()}
         {translationEnabled && !isMine && !sameLanguage && plaintext && !translated && !translating && (
-          <button onClick={translateNow} className="ml-1 hover:text-[#FFD600] flex items-center gap-1" data-testid={`translate-button-${msg.message_id}`}>
+          <button onClick={translateNow} className="ml-1 hover:text-[#FFD600] flex items-center gap-1" data-testid={`translate-button-${msg.message_id}`} title={translationOnDevice ? 'on-device' : 'server'}>
             <Translate size={10} /> translate
           </button>
         )}
@@ -183,27 +194,46 @@ async function fetchAttachmentBytes(fileId) {
   return fetchFileBytes(fileId);
 }
 
-async function decryptAttachment(msg, fileId, privateKey, myUserId) {
-  const key = msg.attachment_encrypted_keys?.[myUserId];
-  if (!key) throw new Error('NO_KEY');
+async function decryptAttachment(msg, fileId, privateKey, myUserId, peerUserId) {
   const cipher = await fetchAttachmentBytes(fileId);
+  if (isSignalV1AttachmentMessage(msg)) {
+    let meta;
+    if (msg.protocol === 'signal_group_v1') {
+      const senderId = msg.sender_id;
+      if (!senderId || !myUserId) throw new Error('NO_KEY');
+      const plaintext = await decryptGroupText(senderId, msg);
+      meta = parseSignalAttachmentEnvelope(plaintext);
+    } else {
+      const remoteId = signalRemoteUserId(msg, { myUserId, peerUserId });
+      if (!remoteId || !myUserId) throw new Error('NO_KEY');
+      meta = await decryptSignalAttachmentBody(remoteId, myUserId, msg);
+    }
+    if (!meta) throw new Error('DECRYPT_FAIL');
+    if (!meta) throw new Error('DECRYPT_FAIL');
+    const plain = await decryptAttachmentBytes(cipher, meta);
+    const mime = meta.content_type || msg.attachment_content_type || 'application/octet-stream';
+    return new Blob([plain], { type: mime });
+  }
+  const key = msg.attachment_encrypted_keys?.[myUserId];
+  if (!key || !privateKey) throw new Error('NO_KEY');
   const plain = await decryptBytes(privateKey, cipher, msg.attachment_iv, key);
   const mime = msg.attachment_content_type || 'application/octet-stream';
   return new Blob([plain], { type: mime });
 }
 
-function useDecryptedAttachment(msg, fileId, privateKey, myUserId) {
+function useDecryptedAttachment(msg, fileId, privateKey, myUserId, peerUserId) {
   const [objectUrl, setObjectUrl] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const needsVault = !isSignalV1AttachmentMessage(msg);
 
   useEffect(() => {
     let mounted = true;
     let url = null;
     (async () => {
-      if (!privateKey) { setLoading(false); return; }
+      if (needsVault && !privateKey) { setLoading(false); return; }
       try {
-        const blob = await decryptAttachment(msg, fileId, privateKey, myUserId);
+        const blob = await decryptAttachment(msg, fileId, privateKey, myUserId, peerUserId);
         url = URL.createObjectURL(blob);
         registerBlobUrl(url);
         if (mounted) {
@@ -228,13 +258,13 @@ function useDecryptedAttachment(msg, fileId, privateKey, myUserId) {
       unsubWipe();
       if (url) unregisterBlobUrl(url);
     };
-  }, [msg, fileId, privateKey, myUserId]);
+  }, [msg, fileId, privateKey, myUserId, peerUserId, needsVault]);
 
   return { objectUrl, error, loading };
 }
 
-function EncryptedImageAttachment({ msg, fileId, caption, privateKey, myUserId }) {
-  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId);
+function EncryptedImageAttachment({ msg, fileId, caption, privateKey, myUserId, peerUserId }) {
+  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId, peerUserId);
   if (loading) return <span className="font-mono text-xs text-[#A1A1AA]">decrypting attachment…</span>;
   if (error) return <span className="font-mono text-xs text-[#FF3B30]">[{error === 'NO_KEY' ? 'no key for attachment' : 'unable to decrypt attachment'}]</span>;
   return (
@@ -245,8 +275,8 @@ function EncryptedImageAttachment({ msg, fileId, caption, privateKey, myUserId }
   );
 }
 
-function EncryptedFileAttachment({ msg, fileId, caption, privateKey, myUserId }) {
-  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId);
+function EncryptedFileAttachment({ msg, fileId, caption, privateKey, myUserId, peerUserId }) {
+  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId, peerUserId);
   if (loading) return <span className="font-mono text-xs text-[#A1A1AA]">decrypting file…</span>;
   if (error) return <span className="font-mono text-xs text-[#FF3B30]">[{error === 'NO_KEY' ? 'no key for file' : 'unable to decrypt file'}]</span>;
   return (
@@ -257,8 +287,8 @@ function EncryptedFileAttachment({ msg, fileId, caption, privateKey, myUserId })
   );
 }
 
-function EncryptedVoiceAttachment({ msg, fileId, privateKey, myUserId }) {
-  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId);
+function EncryptedVoiceAttachment({ msg, fileId, privateKey, myUserId, peerUserId }) {
+  const { objectUrl, error, loading } = useDecryptedAttachment(msg, fileId, privateKey, myUserId, peerUserId);
   if (loading) return <span className="font-mono text-xs text-[#A1A1AA]">decrypting voice…</span>;
   if (error) return <span className="font-mono text-xs text-[#FF3B30]">[{error === 'NO_KEY' ? 'no key for voice' : 'unable to decrypt voice'}]</span>;
   return <audio controls src={objectUrl} className="w-full max-w-[220px]" />;

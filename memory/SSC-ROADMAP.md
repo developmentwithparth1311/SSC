@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-23  
+**Updated:** 2026-06-23 (Engine 9 shipped · `yarn cap:sync` rebuild done)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -26,10 +26,9 @@
 ## Engine progress tree
 
 ```
-Engines 1–5 + 8  ✅ COMPLETE (gates pass)
-Engine 6         ⬜ PLANNED (push / own-metal)
-Engine 7         — (not defined)
-Engine 9         ⬜ PLANNED (on-device translation, close M5)
+Engines 1–5 + 8 + 9  ✅ COMPLETE (gates pass)
+Engine 6             ⬜ PLANNED (push / own-metal)
+Engine 7             — (not defined)
 ```
 
 ### Engine 1 — Retention ✅
@@ -56,6 +55,11 @@ Engine 9         ⬜ PLANNED (on-device translation, close M5)
 - [x] 8.6 Dual-read RSA + SIG/RSA UI labels
 - [x] 8.7 WebRTC 1:1 signaling encrypted (G6 closed)
 - [x] 8.8 Full gate + live integration proof (50 unit + 10 integration + 37 proof checks)
+- [x] 8.9 Signal **1:1 attachments** (Android — AES file + ratchet key envelope)
+- [x] 8.11 **Group Sender Keys** `signal_group_v1` (Android — SKDM fan-out + type 7)
+- [x] 8.13 Group **call signaling** encrypted via Sender Keys
+- [x] 8.12 **Stories** `signal_status_v1` (Sender Keys + contact SKDM fan-out)
+- [ ] 8.10 Signal on **Web** — **blocked** (official `@signalapp/libsignal-client` is Node-native only; no browser WASM)
 
 **Charter:** `memory/SIGNAL_PROTOCOL_CHARTER.md`
 
@@ -63,8 +67,11 @@ Engine 9         ⬜ PLANNED (on-device translation, close M5)
 - [ ] Self-hosted push path evaluation
 - [ ] Own-metal Mongo option (deferred post-investors)
 
-### Engine 9 — Translation privacy ⬜
-- [ ] On-device translation (close M5 plaintext egress)
+### Engine 9 — Translation privacy ✅
+- [x] 9.1 On-device translation policy + unified client
+- [x] 9.2 ML Kit Capacitor plugin (Android `SscTranslate`)
+- [x] 9.3 Message UI uses on-device translate (no server plaintext on APK)
+- [x] 9.4 Engine 9 gate + M5 closed
 
 ---
 
@@ -78,17 +85,19 @@ Engine 9         ⬜ PLANNED (on-device translation, close M5)
 |---------|-------------|---------|--------------|
 | 1:1 text | ✅ `signal_v1` | Legacy RSA | 8.5 ✅ / Web → Engine 8+ |
 | 1:1 call signaling | ✅ encrypted | Legacy cleartext | 8.7 ✅ / Web → 8+ |
-| 1:1 attachments | Legacy RSA | Legacy RSA | **8+ / Engine 9** |
-| Group messages | Legacy RSA | Legacy RSA | **Sender Keys (deferred)** |
-| Group call signaling | Cleartext relay | Cleartext | **Sender Keys + SFU** |
-| Stories / statuses | Legacy RSA | Legacy RSA | **8+** |
+| 1:1 attachments | ✅ `signal_v1` | Legacy RSA | 8.9 ✅ / Web → 8.10 blocked |
+| Group messages | ✅ `signal_group_v1` | Legacy RSA | 8.11 ✅ / Web → 8.10 |
+| Group call signaling | ✅ encrypted (Sender Keys) | Cleartext | 8.13 ✅ / Web → legacy |
+| Stories / statuses | ✅ `signal_status_v1` | Legacy RSA | 8.12 ✅ / Web → legacy |
 | Account unlock | RSA vault (PBKDF2) | Same | Keep (orthogonal to ratchet) |
 
 **Next crypto phases (in order):**
-1. [ ] Signal **attachments** (1:1, Android)
-2. [ ] Signal on **Web** (libsignal WASM bridge)
-3. [ ] **Group Sender Keys**
-4. [ ] Unified identity (retire dual RSA + Curve25519 registration story)
+1. [x] Signal **attachments** (1:1, Android) — 8.9
+2. [x] **Group Sender Keys** — 8.11
+3. [x] Group **call signaling** encryption — 8.13
+4. [x] **Stories** Signal encryption — 8.12
+5. [ ] Signal on **Web** — 8.10 (blocked until Signal ships browser bindings)
+6. [ ] Unified identity (retire dual RSA + Curve25519 registration story)
 
 Details: `memory/SECURITY_MODEL.md`
 
@@ -108,7 +117,7 @@ Details: `memory/SECURITY_MODEL.md`
 | Push FCM + Web VAPID | ✅ |
 | PWA + Capacitor Android APK | ✅ |
 | Google OAuth (web + native) | ✅ configured |
-| Translation | ⚠️ Works but **breaks E2E** when enabled |
+| Translation | ✅ On-device (Android ML Kit); server off by default |
 | iOS app | ⬜ Not started |
 | Custom domain + Turnstile | ⬜ ~28 Jun 2026 |
 | Play Store public | ⬜ AGPL review + listing |
@@ -121,14 +130,12 @@ Details: `memory/SECURITY_MODEL.md`
 | ID | Item | Priority | Engine |
 |----|------|----------|--------|
 | M4 | Contacts graph server metadata | Accepted tradeoff | — |
-| M5 | Translation plaintext when enabled | High | 9 |
 | S3 | Native session lost on force-close | Medium | 5 doc |
-| — | Group Sender Keys | High | 8+ |
-| — | Signal on Web | High | 8+ |
-| — | Signal attachments | Medium | 8+ |
+| — | Signal on Web | High | 8.10 (blocked — no official WASM) |
+| — | Unified identity (RSA + Curve25519) | Medium | 8+ |
 | — | AGPL compliance before public Play | High | Legal |
 
-**Closed:** G6, G9, C8
+**Closed:** G6, G9, C8, M5
 
 ---
 
@@ -144,6 +151,7 @@ Details: `memory/SECURITY_MODEL.md`
 ```powershell
 cd C:\Users\smash\SSC-main\backend
 .\venv\Scripts\python.exe scripts\run_engine8_gate.py
+.\venv\Scripts\python.exe scripts\run_engine9_gate.py
 ```
 
 ---
@@ -156,13 +164,16 @@ cd C:\Users\smash\SSC-main\backend
 - [x] APK bakes Cloud Run URL (`yarn cap:sync` / `SSC-BUILD-APK.bat`)
 - [ ] Custom domain + Turnstile (~28 Jun)
 - [ ] Sync PRD intro text (still says RSA-only — see `memory/PRD.md` header note)
-- [ ] Two-phone smoke: Signal chat + call (founder manual)
+- [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual)
 
 ### P1 — Product / security
-- [ ] Engine 8+ phase 1: Signal attachments (1:1 Android)
-- [ ] Engine 8+ phase 2: Signal on Web (WASM)
-- [ ] Engine 9: on-device translation
-- [ ] Group Sender Keys
+- [x] Engine 8.9: Signal attachments (1:1 Android)
+- [x] Engine 8.11: Group Sender Keys
+- [x] Engine 8.12: Stories Signal encryption
+- [x] Engine 8.13: Group call signaling encryption
+- [ ] Engine 8.10: Signal on Web (blocked — official lib is Node-native)
+- [x] Engine 9: on-device translation (M5)
+- [ ] Unified identity (retire dual RSA + Curve25519)
 - [ ] TURN verification on cellular/Wi‑Fi mix
 - [ ] AGPL legal review
 
@@ -182,8 +193,9 @@ cd C:\Users\smash\SSC-main\backend
 
 | Metric | Value |
 |--------|-------|
-| pytest collected | **462** |
-| Engine 8 gate | 50 unit + 10 integration + 37 proof |
+| pytest collected | **462+** |
+| Engine 8 gate | 50 unit + 10 integration + proof (through 8.12) |
+| Engine 9 gate | translation guard + policy + proof |
 | Frontend tests | 0 |
 
 ---
@@ -195,5 +207,11 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-17 | MVP iterations 1–3 |
 | 2026-06-23 | Engines 1–5 complete |
 | 2026-06-23 | Engine 8 complete (libsignal 0.96.2) |
+| 2026-06-23 | Engine 8.9 — Signal 1:1 attachments (Android) |
+| 2026-06-23 | Engine 8.11 — Group Sender Keys `signal_group_v1` |
+| 2026-06-23 | Engine 8.12 — Stories `signal_status_v1` |
+| 2026-06-23 | Engine 8.13 — Group call signaling encrypted |
 | 2026-06-23 | Single roadmap file — retired duplicate Desktop roadmaps |
 | 2026-06-23 | Cloud Run production API live; OAuth on Cloud Run redirect |
+| 2026-06-23 | Engine 9 — on-device translation (ML Kit Android); M5 closed |
+| 2026-06-23 | `yarn cap:sync` rebuild — Engine 9 + Signal 8.9–8.13 baked into APK |

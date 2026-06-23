@@ -8,7 +8,8 @@ import { useLocale } from '../context/LocaleContext';
  */
 export default function EncryptionModeBadge({ protocol, compact = false }) {
   const { t } = useLocale();
-  const isSignal = protocol === ProtocolVersion.SIGNAL_V1;
+  const isSignal = protocol === ProtocolVersion.SIGNAL_V1
+    || protocol === ProtocolVersion.SIGNAL_GROUP_V1;
 
   if (compact) {
     return (
