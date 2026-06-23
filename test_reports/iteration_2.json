@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 2 backend testing complete. 56 of 57 pytest tests passed. Verified: /api/config (turnstile_sitekey + vapid_public_key), 2FA setup/verify/disable + login challenge with X-Requires-2FA header, push subscribe/unsubscribe + /push/public-key matches /config, group conversation creation (g_ prefix, sorted participants, members[]), group rejection cases (404 unknown users, 400 needs 3+ members), list conversations (group + 1-on-1 shape), group message with multi-recipient encrypted_keys, read receipts (explicit + implicit-latest), WebSocket forwards 'read' event to participants, and rate-limiting on /auth/register (5/hr -> 429) and /auth/login (10/5min -> 429). All 35 iteration-1 tests still pass after adding captcha_token. One real security bug discovered: GET /api/auth/me leaks the user's TOTP secret.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/auth/me",
+        "issue": "Response includes raw `totp_secret` field after 2FA is enabled — a TOTP secret leak. The Mongo projection in get_current_user (server.py ~L194) excludes only `_id` and `password_hash`; it must also exclude `totp_secret` and `totp_pending_secret`. Anyone with a valid JWT can read the TOTP secret and bypass 2FA forever.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/register",
+        "issue": "verify_turnstile() returns False for empty/missing captcha_token before calling Cloudflare. With the Cloudflare TEST secret (1x000…AA), siteverify accepts an empty 'response' too, but the local short-circuit prevents the documented 'always-pass' behavior. Iteration-1 register payloads had to be patched to include a captcha_token to keep passing. Either accept missing token when secret is a known test secret, OR document that captcha_token is now mandatory (frontend already supplies it)."
+      },
+      {
+        "endpoint": "POST /api/auth/register (rate-limit)",
+        "issue": "5/hour per-IP is very tight: a normal test suite triggers it on the 6th register. In-memory dict also means it does not survive a worker restart and is not shared across workers — fine for dev/tests but won't work behind a multi-worker prod deployment. Consider Redis-backed limiter."
+      },
+      {
+        "endpoint": "POST /api/auth/2fa/setup",
+        "issue": "If a user already has 2FA enabled, /2fa/setup silently overwrites totp_pending_secret without any check. Not a security issue (verify still requires correct code), but a stronger UX would 409 if totp_enabled is already true."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ssc_backend.py",
+    "/app/backend/tests/test_ssc_iteration2.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: In /app/backend/server.py inside get_current_user (~line 194), extend the Mongo projection to exclude totp_secret and totp_pending_secret: `{\"_id\": 0, \"password_hash\": 0, \"totp_secret\": 0, \"totp_pending_secret\": 0}`. Same projection should also be applied to any other endpoint that returns a user document (search, peer dicts, conversation members, etc.).",
+    "Re-run pytest after the fix; the only failing test (test_2fa_setup_and_verify_and_login) should then pass to give 57/57."
+  ],
+  "critical_code_review_comments": [
+    "SECURITY (CRITICAL): /auth/me leaks totp_secret — see action item 1.",
+    "Rate-limit bucket (server.py L147) is per-worker in-memory; for production it MUST be shared (Redis) or attached to the load-balancer, otherwise multiple workers each allow N requests, and a single worker restart resets the counter.",
+    "verify_turnstile() (L167) returns False on empty token before contacting Cloudflare — fine semantically, but the review request explicitly stated test-secret should accept missing tokens. Behaviour and request diverge; choose one.",
+    "send_push_for_message(): if VAPID_PRIVATE is set but vapid claims expire (`exp` defaults to ~12h in pywebpush) the call will silently fail. Consider explicit `aud` per endpoint + `exp` claim.",
+    "send_message → asyncio.create_task(send_push_for_message(...)) is fire-and-forget; unhandled exceptions inside the task only get logged at WARNING. OK for now but consider a global task-exception handler.",
+    "/conversations group flow inserts then pops _id (L544) — correct, but list_conversations should also do `{\"_id\": 0}` projection which it does. Good.",
+    "server.py is now 986 lines — over the 700-line guideline. Time to split into modules (auth, conversations, messages, push, 2fa, ws).",
+    "POST /messages does NOT validate that encrypted_keys covers every participant — a client could send a group message with only its own key, locking everyone out. Soft warning; client-side currently does it correctly.",
+    "/auth/2fa/setup happily overwrites totp_pending_secret even after 2FA is already enabled; consider rejecting until current code is provided.",
+    "Server-side Pydantic models for MarkReadIn etc. should bound message_id length to avoid abuse."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ssc_backend.py (added captcha_token to register payloads; added X-Forwarded-For on eve register to dodge rate-limit)",
+    "/app/backend/tests/test_ssc_iteration2.py (NEW — 22 tests covering /config, 3-user setup, turnstile shape, 2FA, push, groups, read receipts, WS read broadcast, rate-limit register & login)"
+  ],
+  "success_rate": {"backend": "98% (56/57)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "Tests register fresh users with unique SUFFIX each run: i2u1<sfx>, i2u2<sfx>, i2u3<sfx> for iter2; alic<sfx>/bobt<sfx>/evet<sfx> for iter1.",
+  "seed_data_creation": "No persistent seed; each test run creates its own users (UUID-suffixed). test_panic_wipe in iter1 wipes alice's conversations so re-runs are clean.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Two pytest files: test_ssc_backend.py (iter1) and test_ssc_iteration2.py (iter2). Both registration flows now require a captcha_token because TURNSTILE_SECRET is set in .env — supply any non-empty string. Rate-limit (5/hr register, 10/5min login) is per-IP in-memory and PERSISTS across pytest test files inside the same backend process. Use `X-Forwarded-For: <unique-ip>` header to give each register/login call its own bucket. ALWAYS `sudo supervisorctl restart backend && sleep 3` before running the suite to clear rate-limit + 2FA-pending state. Single open bug: /auth/me leaks totp_secret (fix projection in get_current_user).",
+  "rca of the issue": "RCA — totp_secret leak: server.py uses `db.users.find_one({...}, {\"_id\": 0, \"password_hash\": 0})` inside get_current_user. The user document persists `totp_secret` (line ~766 in twofa_verify: `$set: {totp_enabled: True, totp_secret: secret}`). Because the projection only strips password_hash, the secret is returned as part of /auth/me, /auth/login (the `user` field), and anywhere else current is returned. Reproduction: register → POST /auth/2fa/setup → POST /auth/2fa/verify with TOTP → GET /auth/me → response JSON includes `totp_secret`. Mitigation: add `totp_secret: 0, totp_pending_secret: 0` to the projection in get_current_user; also explicitly strip these keys from `user` dicts returned by /auth/login and /auth/register (the register handler already filters them with a key-tuple, but /auth/login filter does too — verify both)."
+}

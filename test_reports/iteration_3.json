@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 3 re-test PASSED. The critical TOTP-secret leak in /auth/me is fixed. Added a new comprehensive test (test_no_totp_secret_leak_anywhere) that asserts `totp_secret` and `totp_pending_secret` never appear in /auth/me, /auth/login.user, /users/search, POST /conversations (group), GET /conversations, GET /users/{user_id}/public — both for a peer and for self while 2FA is ENABLED. All assertions pass. Full pytest suite (iteration-1 + iteration-2 + new leak test) = 58/58 GREEN in 18.58s.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /auth/register", "issue": "verify_turnstile() short-circuits to False on empty captcha_token before contacting Cloudflare. With CF TEST secret (1x000…AA) /siteverify would also accept an empty 'response', so the local guard diverges from documented test-secret behaviour. Frontend already supplies a token, so this is cosmetic."},
+      {"endpoint": "POST /auth/register (rate-limit)", "issue": "5/hour per-IP, in-memory only. Does not survive worker restart and is not shared across workers — won't work behind multi-worker prod deployment. Use Redis."},
+      {"endpoint": "POST /auth/2fa/setup", "issue": "Silently overwrites totp_pending_secret even when totp_enabled is already true. UX could return 409."},
+      {"endpoint": "POST /messages", "issue": "Does not validate that encrypted_keys covers every participant — a buggy/malicious client could lock everyone else out of a group thread. Client-side currently does this correctly."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ssc_backend.py",
+    "/app/backend/tests/test_ssc_iteration2.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "(Already done by main agent) /auth/me, /auth/login, /users/search, group conversation create, /users/{user_id}/public no longer expose totp_secret/totp_pending_secret — verified.",
+    "Non-blocking: split server.py (~987 lines) into modules (auth, conversations, messages, push, 2fa, ws) per 700-line guideline.",
+    "Non-blocking: move per-IP rate-limit bucket to Redis so it survives restarts and is shared across workers.",
+    "Non-blocking: validate encrypted_keys covers every participant on POST /messages."
+  ],
+  "critical_code_review_comments": [
+    "FIX VERIFIED: All 7 user-document projections in server.py now exclude totp_secret and totp_pending_secret. The exclusive projections (find/find_one with field:0) cover /auth/me, /auth/login (build user via key-tuple filter on L343/L362), /auth/register (same key-tuple filter), group conv create (L526, L552), 2fa setup/verify/disable. Inclusive projections (search L505, list_conversations peers L587, public L283) only return whitelisted fields so they're inherently safe.",
+    "server.py is 987 lines — exceeds 700-line guideline. Splitting recommended.",
+    "Rate-limit bucket is per-worker in-memory; production should use Redis.",
+    "send_push_for_message is fire-and-forget via asyncio.create_task — unhandled exceptions only surface in logs. Consider a global task-exception handler.",
+    "Pydantic models (e.g., MarkReadIn) should bound message_id length to prevent abuse."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ssc_iteration2.py (added test_no_totp_secret_leak_anywhere covering /auth/me, /auth/login, /users/search, POST /conversations group, GET /conversations, GET /users/{id}/public for both peer and self-with-2FA-on)"
+  ],
+  "success_rate": {"backend": "100% (58/58)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "Iter1: alic<sfx>/bobt<sfx>/evet<sfx>. Iter2: i2u1<sfx>/i2u2<sfx>/i2u3<sfx>. SUFFIX = uuid hex[:4] generated per run.",
+  "seed_data_creation": "No persistent seed. Each run registers fresh UUID-suffixed users. test_panic_wipe cleans alice's data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 58 backend tests pass after the TOTP-secret leak fix. The new test test_no_totp_secret_leak_anywhere runs AFTER 2FA is enabled (test_2fa_login_with_correct_code_succeeds) and BEFORE test_2fa_disable, so u1 has 2FA on for the strongest assertion. Run order matters: keep test_2fa_disable strictly after this new test. Per-IP rate-limit (5/hr register, 10/5min login) is in-memory and persists across the two test files inside the same backend process; supervisor restart clears it. Always `sudo supervisorctl restart backend && sleep 3` before re-running.",
+  "rca of the issue": "ROOT CAUSE: server.py had 7 user-document Mongo projections that excluded only `_id` and `password_hash`. After /auth/2fa/verify wrote `totp_secret` into the user document, any subsequent read (/auth/me, /auth/login response.user, group conv peer lookup) returned the secret. FIX (applied by main agent): all 7 exclusive projections now also exclude `totp_secret` and `totp_pending_secret`; the existing /auth/register and /auth/login response builders already filter `totp_secret` via a key-tuple on the in-memory doc. Inclusive projections (search/public/list peers) were already safe. VERIFICATION: test_no_totp_secret_leak_anywhere recursively walks every JSON object returned by each affected endpoint while u1's 2FA is enabled and asserts neither key is present. All 58/58 tests pass."
+}

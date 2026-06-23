@@ -1,0 +1,92 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) - Tactical/Terminal Variant",
+  "domain": "hybrid_fullstack secure messaging app",
+  "emotional_tone": "Stealthy, brutalist-secure, reliable, un-hackable, ephemeral.",
+  "colors": {
+    "background_primary": "#0A0A0A",
+    "background_secondary": "#121212",
+    "surface_card": "#1A1A1A",
+    "surface_chat_sent": "#1E2A38",
+    "surface_chat_received": "#232323",
+    "text_primary": "#F0F0F0",
+    "text_secondary": "#A1A1AA",
+    "accent_primary": "#00E5FF",
+    "accent_secondary": "#FFD600",
+    "danger_panic": "#FF3B30",
+    "success_verified": "#34C759",
+    "border": "#27272A"
+  },
+  "typography": {
+    "heading_font": "JetBrains Mono",
+    "body_font": "IBM Plex Sans",
+    "scales": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tighter",
+      "h2": "text-2xl md:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small_labels": "text-xs font-mono uppercase tracking-[0.2em]"
+    }
+  },
+  "spacing_and_layout": {
+    "general_philosophy": "Dense and tactical. Use strict grid hierarchy, compact spacing for chat, generous for settings.",
+    "container_padding": "p-4 md:p-6",
+    "bento_grid": "grid-cols-1 md:grid-cols-4 gap-4",
+    "sidebar": "w-full md:w-80 lg:w-96 border-r border-border",
+    "chat_area": "flex-1 flex flex-col h-screen"
+  },
+  "components_strategy": {
+    "chat_bubbles": "Subtle brutalist edges (rounded-md). No pure black to prevent OLED smearing. Sent messages align right with a slight blue tint (#1E2A38), received messages align left with dark grey (#232323).",
+    "panic_button": "Sticky, always accessible in header or navigation. Bright Red (#FF3B30) background, bold white text, requires long-press or double-tap to prevent accidental wipe.",
+    "inputs_and_forms": "Shadcn components heavily customized: flat backgrounds, 1px solid border (#27272A), sharp corners (rounded-sm), high contrast text.",
+    "auto_translate_toggle": "Prominent inline toggle inside chat header. Uses yellow/amber accent when active to denote translation state.",
+    "timer_indicator": "Small monospace countdown timer (e.g., '23:59:59') appended to message bubbles or chat header."
+  },
+  "surfaces_and_materials": {
+    "glassmorphism": "Used ONLY for sticky headers. Heavy blur (backdrop-blur-xl), dark translucent bg (bg-black/80), 1px bottom border (border-white/10).",
+    "neumorphism": "Avoided completely. Go for flat, tactical look.",
+    "grid_borders": "Use border-collapse style layout for sidebar vs main chat area."
+  },
+  "icons_and_assets": {
+    "libraries_to_install": [
+      "yarn add @phosphor-icons/react",
+      "yarn add lucide-react"
+    ],
+    "icon_style": "Phosphor Icons (Duotone or Regular) for a technical, crisp look. Lucide as fallback.",
+    "image_urls": {
+      "abstract_background": {
+        "url": "https://images.unsplash.com/photo-1561233835-f937539b95b9",
+        "description": "Abstract stealth technology background with blue light patterns"
+      },
+      "secure_padlock_abstract": {
+        "url": "https://images.unsplash.com/photo-1770158392528-485559d4778f",
+        "description": "Abstract dark bokeh lights resembling encryption or secure states"
+      },
+      "user_avatar_silhouette_1": {
+        "url": "https://images.unsplash.com/photo-1557844681-b0da6a516dc9",
+        "description": "Minimalist user profile dark silhouette"
+      },
+      "user_avatar_silhouette_2": {
+        "url": "https://images.pexels.com/photos/5484064/pexels-photo-5484064.jpeg",
+        "description": "Powerful black and white silhouette of a person with a ring light"
+      },
+      "anonymous_hacker_avatar": {
+        "url": "https://images.unsplash.com/photo-1582266255765-fa5cf1a1d501",
+        "description": "Blue and black abstract anonymous mask"
+      }
+    }
+  },
+  "motion_and_interaction": {
+    "message_disappear": "Dissolve or stark fade-out effect when 24h timer expires.",
+    "hover_states": "Crisp background lighten (hover:bg-[#2C2C2C]) with explicitly set text color.",
+    "panic_wipe": "Screen flash red, followed by immediate redirect to login with 'Data Wiped' toast."
+  },
+  "instructions_to_main_agent": {
+    "file_extension_rule": "The project uses .js/.jsx files. DO NOT use .tsx or .ts files. Provide all code snippets and instructions for standard JavaScript + React.",
+    "testing_attributes": "All interactive and key informational elements MUST include a data-testid attribute (e.g., data-testid='login-submit-button', data-testid='panic-wipe-button'). Use kebab-case and role-based naming.",
+    "routing_structure": "1. /login (Email+Pass or Google) -> 2. /setup-username (if first login) -> 3. /chat (Main Dashboard with Sidebar and Chat Area).",
+    "component_customization": "Heavily customize Shadcn components. Do not rely on default Vercel-look. Remove standard rounded-full borders, use sharper rounded-md or rounded-sm. Override tablist heights if needed.",
+    "encryption_indicators": "Always display 'E2E Encrypted' with a padlock icon in the chat header. The UI must constantly reassure the user of security.",
+    "username_validation": "Enforce 4-12 characters live validation on the frontend. Block explicitly forbidden words ('ADMIN', 'SSC', sexual terms)."
+  }
+}

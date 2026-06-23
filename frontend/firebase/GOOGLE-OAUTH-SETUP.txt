@@ -1,0 +1,49 @@
+Google Sign-In setup for SSC
+=============================
+
+Code is implemented. You must create OAuth credentials once in Google Cloud Console.
+
+Project: super-chat-b0992 (Firebase)
+
+STEP 1 — Open Google Cloud Console
+  https://console.cloud.google.com/apis/credentials?project=super-chat-b0992
+
+STEP 2 — Configure OAuth consent screen (if not done)
+  - User type: External (or Internal for workspace)
+  - App name: SSC
+  - Add scopes: email, profile, openid
+
+STEP 3 — Create OAuth 2.0 Client ID — Web application
+  Name: SSC Web
+  Authorized JavaScript origins:
+    http://localhost:3000
+    http://localhost
+    http://127.0.0.1:8000
+    http://192.168.1.154:8000
+  Authorized redirect URIs:
+    http://127.0.0.1:8000/api/auth/google/callback
+    http://192.168.1.154:8000/api/auth/google/callback
+    http://localhost:8000/api/auth/google/callback
+
+  Copy Client ID and Client Secret → backend/.env:
+    GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+    GOOGLE_CLIENT_SECRET=GOCSPX-...
+    GOOGLE_REDIRECT_URI=http://192.168.1.154:8000/api/auth/google/callback
+    FRONTEND_OAUTH_REDIRECT=http://localhost:3000
+    NATIVE_OAUTH_REDIRECT=http://localhost
+
+STEP 4 — Create OAuth 2.0 Client ID — Android (optional, improves native)
+  Package name: chat.ssc.secure
+  SHA-1: run on PC:
+    keytool -list -v -keystore %USERPROFILE%\.android\debug.keystore -alias androiddebugkey -storepass android -keypass android
+  Download updated google-services.json → frontend/android/app/google-services.json
+  Rebuild APK: yarn cap:sync && gradlew assembleDebug
+
+STEP 5 — Restart backend
+  SSC-START-FOR-PHONE.bat
+
+STEP 6 — Test
+  - Web: http://localhost:3000/login → Continue with Google
+  - Phone: SSC app login → Continue with Google (opens browser, returns to app)
+
+New Google users go to /setup to pick username + encryption password.

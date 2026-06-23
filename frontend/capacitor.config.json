@@ -1,0 +1,24 @@
+{
+  "appId": "chat.ssc.secure",
+  "appName": "SSC",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "launchShowDuration": 0,
+      "backgroundColor": "#0A0A0A",
+      "androidSplashResourceName": "splash_screen",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0A0A0A"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+SSC Native Push (FCM + APNs) — Firebase setup
+=============================================
+
+1. Create a project at https://console.firebase.google.com/
+
+2. ANDROID
+   - Add Android app, package name: chat.ssc.secure
+   - Download google-services.json
+   - Place at: frontend/android/app/google-services.json
+   - Rebuild: yarn cap:sync
+
+3. iOS (Mac + Xcode required)
+   - Add iOS app, bundle ID: chat.ssc.secure
+   - Download GoogleService-Info.plist → frontend/ios/App/App/
+   - Firebase Console → Project Settings → Cloud Messaging → upload APNs Auth Key (.p8)
+   - Xcode: enable Push Notifications + Background Modes → Remote notifications
+   - yarn cap:add:ios && yarn cap:sync
+
+4. BACKEND
+   - Firebase Console → Service accounts → Generate new private key
+   - Save JSON and set in backend/.env:
+     GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json
+   - Restart backend
+
+5. TEST
+   - Build mobile app with REACT_APP_BACKEND_URL pointing to your API
+   - Login → vault unlock → native token registers via /api/push/native/subscribe
+   - Send message from another user while app is backgrounded
+
+Web/PWA push (VAPID) is unchanged and independent.
+
+SECURITY (local only — never commit)
+------------------------------------
+  backend/.env
+  backend/firebase/service-account.json
+  backend/atlas-credentials.env
+  frontend/android/app/google-services.json
+
+Delete copies on Desktop after files are in place above.
+
+READY TO BUILD
+--------------
+1. Backend (new terminal):
+     cd backend
+     .\venv\Scripts\python.exe -m uvicorn server:app --port 8000
+
+2. Android app:
+     cd frontend
+     yarn cap:android
+   (Android Studio → Run on device/emulator)
+
+3. Real device: set REACT_APP_BACKEND_URL in .env.production.local
+   (use PC LAN IP or deployed HTTPS API, not localhost)

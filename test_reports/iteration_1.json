@@ -1,0 +1,38 @@
+{
+  "summary": "Full SSC backend e2e tested (35 pytests). All endpoints working: health, username validation (banned-term/length/regex), register/login/me, user search, conversation CRUD, encrypted message send/list, Gemini-3-Flash translate (ro→en returned English), file upload/download via Emergent Object Storage, panic-wipe, Google OAuth shape, WebSocket (ping/pong + typing broadcast + WebRTC call-offer forwarding), MongoDB TTL index on messages.expires_at. One backend bug was found and fixed: /api/auth/register returned 500 because the inserted Mongo doc retained an ObjectId _id and FastAPI's jsonable_encoder could not serialize it.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ssc_backend.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Server stores message.created_at as ISO string but expires_at as datetime. Consistent type would simplify queries; current setup is correct for TTL, just noting inconsistency.",
+    "list_conversations enriches each conversation with peer info + last_message via N+1 queries (one per conv). Fine for small N but could batch with $lookup at scale.",
+    "/api/files/{file_id} accepts ?auth=<JWT> in querystring — JWT will leak into server access logs and proxy logs. Consider short-lived signed download URLs.",
+    "ConnectionManager.user_sockets is process-local; multi-worker deployments will break WebSocket fanout. Acceptable for MVP single-worker; document this.",
+    "panic_wipe sets files.is_deleted=true but never removes the underlying object from Emergent Object Storage — the storage 24h TTL is the only thing that erases user data. Should call a storage DELETE for true 'panic'.",
+    "register endpoint mutates the doc dict after insert_one (Motor adds _id in-place). Fixed by excluding _id in response; better pattern: build response dict separately from the insert doc."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (one-line fix in /api/auth/register response builder to exclude _id)",
+    "/app/backend/tests/test_ssc_backend.py (new)",
+    "/app/backend/tests/pytest.ini (new)"
+  ],
+  "success_rate": {"backend": "100% (35/35)", "frontend": "not tested"},
+  "test_credentials": "Tests register fresh users per run with unique email/username suffix (e.g. alic<rand>, bobt<rand>). Passwords: AlicePass2026!, BobPass2026!",
+  "seed_data_creation": "Three users created per run (alice-like, bob-like, eve-like), one conversation, one message — all wiped by the final panic_wipe test for alice; bob/eve and their data remain but are uniquely suffixed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is fully green. Re-run with: cd /app/backend && pytest tests/test_ssc_backend.py -v. Tests are self-contained (unique-suffix users) and idempotent. Frontend was NOT tested per request.",
+  "rca of the issue": "Bug: POST /api/auth/register returned 500. RCA: After `await db.users.insert_one(doc)`, Motor mutates the dict in place adding `_id: ObjectId(...)`. The endpoint then built `user = {k:v for k,v in doc.items() if k != 'password_hash'}` which still contained the un-serializable ObjectId. FastAPI's jsonable_encoder raised TypeError('ObjectId' object is not iterable'). Fix: changed the filter to `k not in ('password_hash', '_id')`, matching the pattern already used in /auth/login. Verified via re-running the full suite — all 35 tests pass."
+}

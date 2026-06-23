@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="15" skipped="0" tests="22" time="2.985" timestamp="2026-06-17T19:42:28.819588+00:00" hostname="agent-env-2025a3c1-2899-4b76-b7c0-f34965b67182"><testcase classname="test_ssc_iteration2" name="test_health_iter2" time="0.286" /><testcase classname="test_ssc_iteration2" name="test_config_endpoint" time="0.142" /><testcase classname="test_ssc_iteration2" name="test_register_three_users" time="0.147"><failure message="AssertionError: register failed: 400 {&quot;detail&quot;:&quot;Captcha verification failed&quot;}&#10;assert 400 == 200&#10; +  where 400 = &lt;Response [400]&gt;.status_code">backend/tests/test_ssc_iteration2.py:83: in test_register_three_users
+    token, user = _register(u)
+                  ^^^^^^^^^^^^
+backend/tests/test_ssc_iteration2.py:52: in _register
+    assert r.status_code == 200, f"register failed: {r.status_code} {r.text}"
+E   AssertionError: register failed: 400 {"detail":"Captcha verification failed"}
+E   assert 400 == 200
+E    +  where 400 = &lt;Response [400]&gt;.status_code</failure></testcase><testcase classname="test_ssc_iteration2" name="test_turnstile_accepts_any_token" time="0.409" /><testcase classname="test_ssc_iteration2" name="test_2fa_setup_and_verify_and_login" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:105: in test_2fa_setup_and_verify_and_login
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_2fa_login_without_code_returns_401_with_header" time="0.100"><failure message="AssertionError: {'detail': 'Invalid credentials'}&#10;assert ('2fa' in 'invalid credentials' or 'code' in 'invalid credentials')">backend/tests/test_ssc_iteration2.py:139: in test_2fa_login_without_code_returns_401_with_header
+    assert "2fa" in detail or "code" in detail, body
+E   AssertionError: {'detail': 'Invalid credentials'}
+E   assert ('2fa' in 'invalid credentials' or 'code' in 'invalid credentials')</failure></testcase><testcase classname="test_ssc_iteration2" name="test_2fa_login_with_wrong_code_returns_401" time="0.138" /><testcase classname="test_ssc_iteration2" name="test_2fa_login_with_correct_code_succeeds" time="0.000"><failure message="KeyError: 'u1_totp_secret'">backend/tests/test_ssc_iteration2.py:155: in test_2fa_login_with_correct_code_succeeds
+    code = pyotp.TOTP(state["u1_totp_secret"]).now()
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_totp_secret'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_2fa_disable" time="0.001"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:167: in test_2fa_disable
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_push_public_key_matches_config" time="0.152" /><testcase classname="test_ssc_iteration2" name="test_push_subscribe_and_unsubscribe" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:187: in test_push_subscribe_and_unsubscribe
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_group_create_unknown_user_returns_404" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:208: in test_group_create_unknown_user_returns_404
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_group_needs_at_least_3_total_members" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:219: in test_group_needs_at_least_3_total_members
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_group_create_success" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:229: in test_group_create_success
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_create_1on1_for_listing" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:254: in test_create_1on1_for_listing
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_list_conversations_has_both" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:267: in test_list_conversations_has_both
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_send_group_message_with_multi_keys" time="0.000"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:291: in test_send_group_message_with_multi_keys
+    token = state["u1_token"]
+            ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_read_receipts_explicit_and_get" time="0.000"><failure message="KeyError: 'dm_id'">backend/tests/test_ssc_iteration2.py:324: in test_read_receipts_explicit_and_get
+    "conversation_id": state["dm_id"],
+                       ^^^^^^^^^^^^^^
+E   KeyError: 'dm_id'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_read_receipts_implicit_latest" time="0.000"><failure message="KeyError: 'dm_id'">backend/tests/test_ssc_iteration2.py:365: in test_read_receipts_implicit_latest
+    "conversation_id": state["dm_id"],
+                       ^^^^^^^^^^^^^^
+E   KeyError: 'dm_id'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_ws_forwards_read_receipt" time="0.001"><failure message="KeyError: 'u1_token'">backend/tests/test_ssc_iteration2.py:399: in test_ws_forwards_read_receipt
+    u1_token = state["u1_token"]
+               ^^^^^^^^^^^^^^^^^
+E   KeyError: 'u1_token'</failure></testcase><testcase classname="test_ssc_iteration2" name="test_zz_rate_limit_register" time="0.434" /><testcase classname="test_ssc_iteration2" name="test_zz_rate_limit_login" time="0.959" /></testsuite></testsuites>

@@ -1,0 +1,1072 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { MagnifyingGlass, Plus, SignOut, Phone, VideoCamera, PaperPlaneTilt, Paperclip, ShieldCheck, Translate, X, LockKey, UsersThree, Gear, Checks, Check, Microphone, CaretLeft } from '@phosphor-icons/react';
+import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { ChatSocket } from '../lib/socket';
+import { decryptMessage, encryptBytesForRecipients, encryptMessageForRecipients, publicKeyFingerprint, b64ToBytes } from '../lib/crypto';
+import { subscribePush } from '../lib/push';
+import { subscribeNativePush } from '../lib/native-push';
+import Message from '../components/Message';
+import PanicButton from '../components/PanicButton';
+import CallModal from '../components/CallModal';
+import SettingsModal from '../components/SettingsModal';
+import CreateGroupModal from '../components/CreateGroupModal';
+import { useLocale } from '../context/LocaleContext';
+import { useMobileLayout } from '../lib/use-mobile';
+import MobileChatMenu, { MenuAction } from '../components/MobileChatMenu';
+import GroupCallModal from '../components/GroupCallModal';
+import { StoriesBar, StoryViewer } from '../components/Stories';
+import ContactsModal from '../components/ContactsModal';
+import { formatLastSeen, isOnline } from '../lib/presence';
+import { consumePendingInvite } from '../lib/invites';
+
+const PENDING_CALL_KEY = 'ssc_pending_call';
+
+export default function ChatHome() {
+  const { user, privateKey, unlockPrivateKey, logout, panicWipe } = useAuth();
+  const navigate = useNavigate();
+  const { conversationId } = useParams();
+  const [conversations, setConversations] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageFilter, setMessageFilter] = useState('');
+  const [decryptedBodies, setDecryptedBodies] = useState({});
+  const [draft, setDraft] = useState('');
+  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [unlockOpen, setUnlockOpen] = useState(!privateKey);
+  const [unlockPwd, setUnlockPwd] = useState('');
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockErr, setUnlockErr] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [myContacts, setMyContacts] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [outgoingRequests, setOutgoingRequests] = useState([]);
+  const [inviteToken, setInviteToken] = useState('');
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const [typingFrom, setTypingFrom] = useState(null);
+  const [callState, setCallState] = useState(null); // { mode, direction, peer, signal }
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [storyGroup, setStoryGroup] = useState(null);
+  const [groupCallState, setGroupCallState] = useState(null); // {mode, direction, members, signal}
+  const [reads, setReads] = useState([]); // [{user_id, last_read_message_id}]
+  const socketRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  const activeConv = useMemo(() => conversations.find((c) => c.conversation_id === activeId), [conversations, activeId]);
+  const peer = activeConv?.peer;
+  const isGroup = !!activeConv?.is_group;
+  const { t } = useLocale();
+  const headerTitle = isGroup ? (activeConv?.name || t('group')) : (peer ? `@${peer.username}` : '');
+  const isMobile = useMobileLayout();
+  const showList = !isMobile || !activeId;
+  const showChatPanel = !isMobile || !!activeId;
+  const sameLangAsPeer = !isGroup && peer?.language && user?.language
+    && peer.language.toLowerCase() === user.language.toLowerCase();
+
+  const leaveChat = () => {
+    setChatMenuOpen(false);
+    goToConversation(null);
+  };
+
+  // Decrypt message bodies client-side for in-chat search (E2E — server never sees plaintext)
+  useEffect(() => {
+    if (!privateKey || !user?.user_id || messages.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      for (const m of messages) {
+        const myKey = m.encrypted_keys?.[user.user_id];
+        if (!myKey || !m.ciphertext || !m.iv) continue;
+        try {
+          next[m.message_id] = await decryptMessage(privateKey, m.ciphertext, m.iv, myKey);
+        } catch {
+          /* skip undecryptable */
+        }
+      }
+      if (!cancelled) setDecryptedBodies(next);
+    })();
+    return () => { cancelled = true; };
+  }, [messages, privateKey, user?.user_id]);
+
+  const filteredMessages = useMemo(() => {
+    const q = messageFilter.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter((m) => {
+      if (m.sender_username?.toLowerCase().includes(q)) return true;
+      const body = decryptedBodies[m.message_id];
+      return body && body.toLowerCase().includes(q);
+    });
+  }, [messages, messageFilter, decryptedBodies]);
+
+  // Build recipients map for outgoing message encryption
+  const recipientsForActive = useMemo(() => {
+    if (!activeConv || !user) return {};
+    const myPub = user.public_key ? (typeof user.public_key === 'string' ? JSON.parse(user.public_key) : user.public_key) : null;
+    const map = { [user.user_id]: myPub };
+    if (isGroup && activeConv.members) {
+      for (const m of activeConv.members) {
+        if (m.public_key) map[m.user_id] = typeof m.public_key === 'string' ? JSON.parse(m.public_key) : m.public_key;
+      }
+    } else if (peer?.public_key) {
+      map[peer.user_id] = typeof peer.public_key === 'string' ? JSON.parse(peer.public_key) : peer.public_key;
+    }
+    return map;
+  }, [activeConv, user, peer, isGroup]);
+
+  // ─── Load conversations ────
+  const loadConversations = async () => {
+    try {
+      const { data } = await api.get('/conversations');
+      setConversations(data);
+    } catch (e) {
+      // ignore
+    }
+  };
+  const goToConversation = useCallback((id) => {
+    setActiveId(id);
+    navigate(id ? `/chat/${id}` : '/chat');
+  }, [navigate]);
+
+  useEffect(() => {
+    if (conversationId) setActiveId(conversationId);
+  }, [conversationId]);
+
+  useEffect(() => { loadConversations(); loadMyContacts(); loadPendingRequests(); }, []);
+
+  useEffect(() => {
+    consumePendingInvite().then((used) => {
+      if (used) {
+        toast.success('Invite used — check pending requests');
+        loadPendingRequests();
+        loadMyContacts();
+        setContactsOpen(true);
+      }
+    });
+  }, []);
+
+  const handlePendingCall = useCallback(async (payload) => {
+    const data = payload?.data || payload;
+    if (!data?.from) return;
+    try {
+      const { data: peerData } = await api.get(`/users/${data.from}/public`);
+      const mode = data.mode || 'audio';
+      if (data.conversation_id) goToConversation(data.conversation_id);
+      if (payload?.action === 'decline') {
+        socketRef.current?.send({ type: 'call-reject', to: data.from });
+        return;
+      }
+      if (data.group) {
+        setGroupCallState({
+          mode,
+          direction: payload?.action === 'answer' ? 'incoming-accepted' : 'incoming',
+          members: [],
+          signal: { from: data.from, from_username: peerData.username },
+        });
+      } else {
+        setCallState({
+          mode,
+          direction: payload?.action === 'answer' ? 'incoming-accepted' : 'incoming',
+          peer: peerData,
+          signal: null,
+        });
+      }
+    } catch {}
+  }, [goToConversation]);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(PENDING_CALL_KEY);
+    if (raw) {
+      sessionStorage.removeItem(PENDING_CALL_KEY);
+      try { handlePendingCall(JSON.parse(raw)); } catch {}
+    }
+    const h = (e) => handlePendingCall(e.detail);
+    window.addEventListener('ssc-call-notification', h);
+    return () => window.removeEventListener('ssc-call-notification', h);
+  }, [handlePendingCall]);
+
+  const loadMyContacts = async () => {
+    try {
+      const { data } = await api.get('/contacts');
+      setMyContacts(data);
+    } catch {}
+  };
+
+  const loadPendingRequests = async () => {
+    try {
+      const { data } = await api.get('/contacts/requests');
+      setPendingRequests(data);
+    } catch {}
+    try {
+      const { data } = await api.get('/contacts/requests/sent');
+      setOutgoingRequests(data);
+    } catch {}
+  };
+
+  const sendFriendRequest = async (u) => {
+    await api.post('/contacts/request', { username: u.username });
+    toast.success(`Friend request sent to @${u.username}`);
+    await loadPendingRequests();
+  };
+
+  const acceptRequest = async (reqId) => {
+    try {
+      await api.post('/contacts/requests/accept', { request_id: reqId });
+      toast.success('Request accepted');
+      await loadPendingRequests();
+      await loadMyContacts();
+      await loadConversations();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const rejectRequest = async (reqId) => {
+    try {
+      await api.post('/contacts/requests/reject', { request_id: reqId });
+      toast.success('Request rejected');
+      await loadPendingRequests();
+    } catch (e) {
+      toast.error('Failed');
+    }
+  };
+
+  const useInvite = async () => {
+    if (!inviteToken.trim()) return;
+    try {
+      await api.post(`/invites/use/${inviteToken.trim()}`);
+      toast.success('Invite used - request sent');
+      setInviteToken('');
+      await loadPendingRequests();
+      await loadMyContacts();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Invalid invite');
+    }
+  };
+
+  const generateInvite = async () => {
+    try {
+      const { data } = await api.post('/invites', { expires_hours: 24 });
+      const link = `${window.location.origin}${data.url}`;
+      await navigator.clipboard.writeText(link);
+      toast.success('Invite link copied! Expires in 24h');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotGenerateInvite'));
+    }
+  };
+
+  const toggleBlock = async (uid) => {
+    const c = myContacts.find(x => x.user_id === uid);
+    if (!c) return;
+    try {
+      if (c.blocked) {
+        await api.post(`/contacts/${uid}/unblock`);
+      } else {
+        await api.post(`/contacts/${uid}/block`);
+      }
+      await loadMyContacts();
+    } catch {}
+  };
+
+  const toggleMute = async (uid) => {
+    const c = myContacts.find(x => x.user_id === uid);
+    if (!c) return;
+    try {
+      if (c.muted) {
+        await api.post(`/contacts/${uid}/unmute`);
+      } else {
+        await api.post(`/contacts/${uid}/mute`);
+      }
+      await loadMyContacts();
+    } catch {}
+  };
+
+  const removeContact = async (uid) => {
+    if (!confirm('Remove contact?')) return;
+    try {
+      await api.delete(`/contacts/${uid}`);
+      await loadMyContacts();
+      // reload convs if needed
+      await loadConversations();
+    } catch {}
+  };
+
+  // Register push as soon as user is logged in (does not require vault unlock)
+  useEffect(() => {
+    if (!user) return;
+    subscribePush().catch(() => {});
+    subscribeNativePush()
+      .then((ok) => { if (ok) toast.success('Push notifications enabled'); })
+      .catch(() => {});
+  }, [user]);
+
+  // ─── Socket ───
+  useEffect(() => {
+    const token = localStorage.getItem('ssc_token');
+    if (!token) return;
+    const s = new ChatSocket(token, {
+      onMessage: (data) => {
+        if (data.type === 'message') {
+          if (data.data.conversation_id === activeId) {
+            setMessages((m) => [...m, data.data]);
+          }
+          loadConversations();
+        } else if (data.type === 'typing') {
+          if (data.conversation_id === activeId && data.user_id !== user?.user_id) {
+            setTypingFrom(data.username);
+            setTimeout(() => setTypingFrom(null), 2500);
+          }
+        } else if (data.type === 'call-offer') {
+          // incoming call
+          (async () => {
+            const { data: peerData } = await api.get(`/users/${data.from}/public`);
+            if (data.group) {
+              // Group call: offer carries members list
+              const members = (data.members || []).filter((m) => m.user_id !== user?.user_id);
+              if (members.length === 0) members.push({ user_id: data.from, username: peerData.username });
+              setGroupCallState({ mode: data.mode, direction: 'incoming', members, signal: { from: data.from, from_username: peerData.username, sdp: data.sdp, members } });
+            } else {
+              setCallState({ mode: data.mode, direction: 'incoming', peer: peerData, signal: { sdp: data.sdp } });
+            }
+          })();
+        } else if (data.type === 'read') {
+          // read receipt from another user
+          if (data.conversation_id === activeId) {
+            setReads((cur) => {
+              const others = cur.filter((r) => r.user_id !== data.user_id);
+              return [...others, { user_id: data.user_id, last_read_message_id: data.last_read_message_id }];
+            });
+          }
+        } else if (data.type === 'conversation-created') {
+          loadConversations();
+        } else if (data.type === 'status-new') {
+          window.dispatchEvent(new Event('ssc-status-new'));
+        } else if (['call-answer', 'ice-candidate', 'call-end', 'call-reject'].includes(data.type)) {
+          window.dispatchEvent(new CustomEvent('ssc-signal', { detail: data }));
+          if (data.type === 'call-end' || data.type === 'call-reject') setCallState(null);
+        }
+      },
+    });
+    s.connect();
+    socketRef.current = s;
+    return () => s.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
+
+  // ─── Load messages on active change ───
+  useEffect(() => {
+    if (!activeId) { setMessages([]); setReads([]); return; }
+    (async () => {
+      try {
+        const { data } = await api.get(`/conversations/${activeId}/messages`);
+        setMessages(data);
+        const { data: rs } = await api.get(`/conversations/${activeId}/reads`);
+        setReads(rs);
+        // mark as read
+        try { await api.post('/messages/read', { conversation_id: activeId }); } catch {}
+      } catch {}
+    })();
+  }, [activeId]);
+
+  // Mark new incoming messages as read when the chat is open
+  useEffect(() => {
+    if (!activeId || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last.sender_id !== user?.user_id) {
+      api.post('/messages/read', { conversation_id: activeId, up_to_message_id: last.message_id }).catch(() => {});
+    }
+  }, [messages, activeId, user]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, activeId]);
+
+  // ─── Search users ───
+  useEffect(() => {
+    if (!searchOpen || searchQ.length < 2) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/users/search', { params: { q: searchQ } });
+        setSearchResults(data);
+      } catch {}
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQ, searchOpen]);
+
+  const startConversation = async (u) => {
+    try {
+      const { data } = await api.post('/conversations', { peer_username: u.username });
+      await loadConversations();
+      goToConversation(data.conversation_id);
+      setSearchOpen(false);
+      setSearchQ('');
+    } catch (e) {
+      const detail = e?.response?.data?.detail || '';
+      if (detail.includes('contacts') || detail.includes('mutual')) {
+        try {
+          await api.post('/contacts/request', { username: u.username });
+          toast.success(`Friend request sent to @${u.username}`);
+          await loadPendingRequests();
+          setSearchOpen(false);
+          setSearchQ('');
+        } catch (reqErr) {
+          toast.error(reqErr?.response?.data?.detail || t('couldNotSendRequest'));
+        }
+      } else {
+        toast.error(detail || t('couldNotStartChat'));
+      }
+    }
+  };
+
+  // ─── Send message ───
+  const sendMessage = async (text, type = 'text', attachmentId = null, attachmentEnc = null) => {
+    if (!privateKey) { setUnlockOpen(true); return; }
+    if (!activeConv) return;
+    if (!text && !attachmentId) return;
+    try {
+      const recipients = recipientsForActive;
+      if (Object.keys(recipients).length < 2) {
+        toast.error('No recipients have encryption keys yet');
+        return;
+      }
+      const enc = await encryptMessageForRecipients(text || '', recipients);
+      await api.post('/messages', {
+        conversation_id: activeId,
+        ciphertext: enc.ciphertext, iv: enc.iv, encrypted_keys: enc.encrypted_keys,
+        message_type: type, attachment_id: attachmentId, plaintext_length: enc.plaintext_length,
+        attachment_iv: attachmentEnc?.iv,
+        attachment_encrypted_keys: attachmentEnc?.encrypted_keys,
+        attachment_content_type: attachmentEnc?.content_type,
+      });
+      setDraft('');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to send (encryption error)');
+    }
+  };
+
+  const uploadEncryptedAttachment = async (blob, filename, mimeType) => {
+    const recipients = recipientsForActive;
+    if (Object.keys(recipients).length < 2) {
+      throw new Error('No recipients have encryption keys yet');
+    }
+    const raw = await blob.arrayBuffer();
+    const enc = await encryptBytesForRecipients(raw, recipients);
+    const cipherBlob = new Blob([b64ToBytes(enc.ciphertext)], { type: 'application/octet-stream' });
+    const form = new FormData();
+    form.append('file', cipherBlob, `${filename}.enc`);
+    form.append('encrypted', 'true');
+    if (mimeType) form.append('original_content_type', mimeType);
+    const { data } = await api.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return {
+      fileId: data.file_id,
+      attachmentEnc: {
+        iv: enc.iv,
+        encrypted_keys: enc.encrypted_keys,
+        content_type: mimeType || 'application/octet-stream',
+      },
+    };
+  };
+
+  const onSendText = (e) => {
+    e?.preventDefault?.();
+    if (!draft.trim()) return;
+    sendMessage(draft.trim(), 'text');
+  };
+
+  // ─── File upload ───
+  const fileInputRef = useRef(null);
+  const onPickFile = () => fileInputRef.current?.click();
+  const onFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const type = (file.type || '').startsWith('image/') ? 'image' : 'file';
+      const { fileId, attachmentEnc } = await uploadEncryptedAttachment(file, file.name, file.type || 'application/octet-stream');
+      await sendMessage(file.name, type, fileId, attachmentEnc);
+    } catch (e) {
+      toast.error(e?.message?.includes('encryption keys') ? e.message : 'Upload failed');
+    }
+  };
+
+  // ─── Calls ───
+  const startCall = (mode) => {
+    if (isGroup && activeConv) {
+      const members = (activeConv.members || []).filter((m) => m.user_id !== user?.user_id);
+      if (members.length === 0) { toast.error('No members in this group'); return; }
+      setGroupCallState({ mode, direction: 'outgoing', members, signal: null });
+      return;
+    }
+    if (!peer) return;
+    setCallState({ mode, direction: 'outgoing', peer, signal: null });
+  };
+
+  const acceptCall = () => {
+    setCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s);
+  };
+  const rejectCall = () => {
+    if (!callState) return;
+    socketRef.current?.send({ type: 'call-reject', to: callState.peer.user_id });
+    setCallState(null);
+  };
+  const rejectGroupCall = () => {
+    if (!groupCallState) return;
+    const from = groupCallState.signal?.from;
+    if (from) {
+      socketRef.current?.send({ type: 'call-reject', to: from, group: true });
+    }
+    setGroupCallState(null);
+  };
+
+  // ─── Unlock private key prompt ───
+  const submitUnlock = async (e) => {
+    e?.preventDefault();
+    if (unlockBusy) return;
+    const pwd = unlockPwd.trim();
+    if (!pwd) {
+      setUnlockErr('Enter your account password');
+      return;
+    }
+    setUnlockBusy(true);
+    setUnlockErr('');
+    try {
+      const pk = await unlockPrivateKey(pwd);
+      if (!pk) throw new Error('Unlock failed');
+      setUnlockOpen(false);
+      setUnlockPwd('');
+      setUnlockErr('');
+      toast.success('Vault unlocked');
+    } catch {
+      setUnlockErr('Wrong password — use the same password you signed in with (123456 for test account)');
+      toast.error(t('couldNotUnlockVault'));
+    } finally {
+      setUnlockBusy(false);
+    }
+  };
+
+  // ─── Typing ───
+  const onDraftChange = (v) => {
+    setDraft(v);
+    if (activeId && socketRef.current) {
+      socketRef.current.send({ type: 'typing', conversation_id: activeId });
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach(t => t.stop());
+        setIsRecording(false);
+        if (blob.size < 1000) return;
+        try {
+          const { fileId, attachmentEnc } = await uploadEncryptedAttachment(blob, 'voice.webm', 'audio/webm');
+          await sendMessage('', 'voice', fileId, attachmentEnc);
+        } catch (e) {
+          toast.error('Failed to send voice note');
+        }
+      };
+      mr.start();
+      setIsRecording(true);
+      setTimeout(() => { if (mr.state === 'recording') mr.stop(); }, 30000);
+    } catch (e) {
+      toast.error('Cannot access microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const myPubFingerprint = useMemo(async () => {
+    if (!user?.public_key) return '';
+    try { return await publicKeyFingerprint(typeof user.public_key === 'string' ? JSON.parse(user.public_key) : user.public_key); } catch { return ''; }
+  }, [user?.public_key]);
+
+  const peerContact = peer ? myContacts.find((c) => c.user_id === peer.user_id) : null;
+
+  return (
+    <div className="mobile-shell flex bg-[#0A0A0A] text-[#F0F0F0] overflow-hidden">
+      {/* Sidebar / chat list */}
+      <aside className={`${showList ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 lg:w-96 md:border-r border-[#27272A] shrink-0 min-h-0`}>
+        <div className="glass-header safe-top safe-x px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2" data-testid="sidebar-logo">
+            <div className="w-7 h-7 rounded-md bg-[#00E5FF] flex items-center justify-center">
+              <LockKey size={14} weight="bold" className="text-black" />
+            </div>
+            <div>
+              <div className="font-mono text-xs tracking-[0.25em]">SSC</div>
+              <div className="text-[10px] font-mono text-[#A1A1AA]">@{user?.username}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSettingsOpen(true)} title={t('settings')} data-testid="open-settings-button"
+              className="w-9 h-9 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center">
+              <Gear size={16} />
+            </button>
+            <PanicButton onWipe={panicWipe} />
+            <button onClick={logout} title={t('logout')} data-testid="logout-button" className="w-9 h-9 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center">
+              <SignOut size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-3 border-b border-[#27272A] flex flex-col gap-2">
+          {!privateKey && (
+            <button
+              type="button"
+              onClick={() => { setUnlockErr(''); setUnlockOpen(true); }}
+              data-testid="vault-locked-banner"
+              className="w-full py-2.5 px-3 rounded-md border border-[#FF9500]/40 bg-[#FF9500]/10 text-left flex items-center gap-2 active:bg-[#FF9500]/20"
+            >
+              <LockKey size={16} className="text-[#FF9500] shrink-0" />
+              <span className="text-xs font-mono text-[#FF9500]">{t('vaultLocked')}</span>
+            </button>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => setSearchOpen(true)} data-testid="new-chat-button"
+              className="flex-1 h-10 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center gap-2 px-3 text-sm text-[#A1A1AA]">
+              <Plus size={16} /> {t('newChat')}
+            </button>
+            <button onClick={() => setGroupOpen(true)} title={t('createGroup')} data-testid="new-group-button"
+              className="w-10 h-10 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center">
+              <UsersThree size={16} />
+            </button>
+          </div>
+          <button onClick={() => setContactsOpen(true)} data-testid="open-contacts-button"
+            className="h-9 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center gap-2 text-[10px] font-mono tracking-widest text-[#A1A1AA]">
+            <UsersThree size={14} /> {t('contacts')}
+            {pendingRequests.length > 0 && (
+              <span className="bg-[#FFD600] text-black px-1.5 rounded text-[9px]">{pendingRequests.length}</span>
+            )}
+          </button>
+        </div>
+
+        {/* Stories bar */}
+        <StoriesBar me={user} privateKey={privateKey} onView={(g) => setStoryGroup(g)} />
+
+        <div className="flex-1 overflow-y-auto">
+          {conversations.length === 0 && (
+            <div className="p-6 text-center text-xs font-mono text-[#A1A1AA] tracking-wider">
+              {t('noConversations')}
+              <p className="mt-2 normal-case font-sans tracking-normal">{t('noConversationsHint')}</p>
+            </div>
+          )}
+          {conversations.map((c) => (
+            <button key={c.conversation_id}
+              data-testid={`conversation-${c.conversation_id}`}
+              onClick={() => goToConversation(c.conversation_id)}
+              className={`w-full text-left px-4 py-3 border-b border-[#27272A] flex items-center gap-3 hover:bg-[#1A1A1A] transition ${activeId === c.conversation_id ? 'bg-[#1A1A1A]' : ''}`}>
+              <div className={`w-10 h-10 rounded-md flex items-center justify-center font-mono text-xs ${c.is_group ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
+                {c.is_group ? <UsersThree size={16} /> : (c.peer?.username?.slice(0, 2).toUpperCase() || '??')}
+                {!c.is_group && c.peer?.last_seen && (new Date() - new Date(c.peer.last_seen) < 5*60*1000) && (
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#34C759] rounded-full tac-border" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium truncate">
+                    {c.is_group ? (c.name || t('group')) : `@${c.peer?.username}`}
+                  </span>
+                  <span className="text-[10px] font-mono text-[#A1A1AA]">
+                    {c.is_group ? `${c.participants.length}P` : c.peer?.language?.toUpperCase()}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#A1A1AA] truncate font-mono">
+                  {c.last_message ? `· ${t('encryptedMessage')} ·` : t('noMessagesYet')}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      {/* Chat panel */}
+      <main className={`${showChatPanel ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-h-0 min-w-0 w-full`}>
+        {!activeConv ? (
+          <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center px-6 relative">
+            <div
+              aria-hidden
+              className="absolute inset-0 opacity-[0.05] pointer-events-none"
+              style={{ backgroundImage: 'linear-gradient(rgba(0,229,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.4) 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+            />
+            <ShieldCheck size={48} weight="duotone" className="text-[#00E5FF] mb-4 relative" />
+            <h2 className="font-mono text-2xl tracking-tighter relative">{t('selectChat')}</h2>
+            <p className="text-sm text-[#A1A1AA] mt-2 relative">{t('selectChatHint')}</p>
+          </div>
+        ) : (
+          <>
+            <header className="glass-header safe-x px-2 md:px-4 py-2 md:py-3 flex items-center gap-2 shrink-0">
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={leaveChat}
+                  className="w-10 h-10 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center shrink-0"
+                  data-testid="chat-back-button"
+                  aria-label={t('back')}
+                >
+                  <CaretLeft size={20} weight="bold" />
+                </button>
+              )}
+              <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                <div className={`w-9 h-9 rounded-md flex items-center justify-center font-mono text-xs shrink-0 ${isGroup ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
+                  {isGroup ? <UsersThree size={16} /> : peer?.username?.slice(0, 2).toUpperCase()}
+                  {!isGroup && isOnline(peer?.last_seen) && (
+                    <div className="absolute bottom-0 right-0 w-2 h-2 bg-[#34C759] rounded-full tac-border" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
+                    {headerTitle}
+                  </div>
+                  <div className="text-[10px] font-mono text-[#34C759] tracking-wider truncate flex items-center gap-1">
+                    <ShieldCheck size={10} weight="fill" className="shrink-0" />
+                    <span className="truncate">
+                      {isGroup
+                        ? `E2E · ${activeConv.participants.length} ${t('members')}`
+                        : `${formatLastSeen(peer?.last_seen)} · ${peer?.language?.toUpperCase() || '—'}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                {isMobile ? (
+                  <>
+                    {!isGroup && peer && (
+                      <MobileChatMenu
+                        open={chatMenuOpen}
+                        onToggle={() => setChatMenuOpen((v) => !v)}
+                        onClose={() => setChatMenuOpen(false)}
+                      >
+                        {!sameLangAsPeer && (
+                          <MenuAction
+                            testId="mobile-toggle-autotranslate"
+                            onClick={() => {
+                              setChatMenuOpen(false);
+                              setAutoTranslate((v) => {
+                                if (!v) toast.warning(t('autoTranslateWarning'));
+                                return !v;
+                              });
+                            }}
+                          >
+                            {t('autoTr')} {autoTranslate ? t('on') : t('off')}
+                          </MenuAction>
+                        )}
+                        <MenuAction
+                          testId="mobile-block"
+                          onClick={() => { setChatMenuOpen(false); toggleBlock(peer.user_id); }}
+                        >
+                          {peerContact?.blocked ? t('unblock') : t('block')}
+                        </MenuAction>
+                        <MenuAction
+                          testId="mobile-mute"
+                          onClick={() => { setChatMenuOpen(false); toggleMute(peer.user_id); }}
+                        >
+                          {peerContact?.muted ? t('unmute') : t('mute')}
+                        </MenuAction>
+                        <MenuAction
+                          testId="mobile-delete-contact"
+                          danger
+                          onClick={() => { setChatMenuOpen(false); removeContact(peer.user_id); }}
+                        >
+                          {t('deleteContact')}
+                        </MenuAction>
+                      </MobileChatMenu>
+                    )}
+                    <button onClick={() => startCall('audio')} data-testid="start-voice-call" className="w-10 h-10 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center" title={t('voiceCall')}>
+                      <Phone size={18} />
+                    </button>
+                    <button onClick={() => startCall('video')} data-testid="start-video-call" className="w-10 h-10 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center" title={t('videoCall')}>
+                      <VideoCamera size={18} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {!isGroup && peer && (
+                      <>
+                        <button onClick={() => toggleBlock(peer.user_id)} className="text-[10px] px-2 py-1 tac-border rounded" data-testid="block-button">
+                          {peerContact?.blocked ? t('unblock').toUpperCase() : t('block').toUpperCase()}
+                        </button>
+                        <button onClick={() => toggleMute(peer.user_id)} className="text-[10px] px-2 py-1 tac-border rounded" data-testid="mute-button">
+                          {peerContact?.muted ? t('unmute').toUpperCase() : t('mute').toUpperCase()}
+                        </button>
+                        <button onClick={() => removeContact(peer.user_id)} className="text-[10px] px-2 py-1 tac-border rounded text-[#FF3B30]" data-testid="delete-contact-button">
+                          {t('deleteLabel')}
+                        </button>
+                      </>
+                    )}
+                    {!sameLangAsPeer && (
+                      <button onClick={() => {
+                        setAutoTranslate((v) => {
+                          if (!v) toast.warning(t('autoTranslateWarning'));
+                          return !v;
+                        });
+                      }} data-testid="toggle-autotranslate"
+                        className={`h-9 px-3 rounded-md tac-border flex items-center gap-2 text-xs font-mono tracking-widest ${autoTranslate ? 'bg-[#FFD600] text-black' : 'bg-[#121212] hover:bg-[#1A1A1A]'}`}>
+                        <Translate size={14} /> {t('autoTr')} {autoTranslate ? t('on') : t('off')}
+                      </button>
+                    )}
+                    <button onClick={() => startCall('audio')} data-testid="start-voice-call" className="w-9 h-9 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center" title={t('voiceCall')}>
+                      <Phone size={16} />
+                    </button>
+                    <button onClick={() => startCall('video')} data-testid="start-video-call" className="w-9 h-9 rounded-md tac-border bg-[#121212] hover:bg-[#1A1A1A] flex items-center justify-center" title={t('videoCall')}>
+                      <VideoCamera size={16} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </header>
+
+            <div ref={scrollRef} className="chat-scroll px-3 md:px-6 py-3 flex flex-col gap-3">
+              <div className="hidden md:block px-3 py-1">
+                <input value={messageFilter} onChange={(e) => setMessageFilter(e.target.value)} placeholder={t('searchMessages')} className="w-full text-xs bg-transparent border-0 border-b border-[#27272A] pb-1" data-testid="message-filter" />
+              </div>
+              {messages.length === 0 && (
+                <div className="text-center text-xs font-mono text-[#A1A1AA] tracking-wider my-8">
+                  {t('sayHello')}
+                </div>
+              )}
+              {filteredMessages.map((m) => (
+                <Message
+                  key={m.message_id}
+                  msg={m}
+                  isMine={m.sender_id === user?.user_id}
+                  myUserId={user?.user_id}
+                  privateKey={privateKey}
+                  autoTranslate={autoTranslate && !sameLangAsPeer}
+                  targetLang={user?.language || 'en'}
+                  sourceLang={peer?.language}
+                  reads={reads}
+                  participantsCount={activeConv?.participants?.length || 2}
+                />
+              ))}
+              {typingFrom && (
+                <div className="text-[11px] font-mono text-[#A1A1AA] tracking-wider self-start" data-testid="typing-indicator">
+                  {t('typingUser', { user: typingFrom })}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={onSendText} className="chat-composer safe-bottom safe-x border-t border-[#27272A] px-2 md:px-3 py-2 flex items-center gap-2">
+              <input ref={fileInputRef} type="file" hidden onChange={onFileChange} data-testid="file-input" />
+              <button type="button" onClick={onPickFile} data-testid="attach-button"
+                className="w-11 h-11 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center shrink-0">
+                <Paperclip size={18} />
+              </button>
+              <button type="button" onClick={isRecording ? stopRecording : startRecording} data-testid="voice-button"
+                className={`w-11 h-11 rounded-md tac-border flex items-center justify-center shrink-0 ${isRecording ? 'bg-[#FF3B30] text-white' : 'bg-[#121212] active:bg-[#1A1A1A]'}`}>
+                <Microphone size={18} />
+              </button>
+              <input
+                value={draft}
+                onChange={(e) => onDraftChange(e.target.value)}
+                data-testid="message-input"
+                placeholder={t('messagePlaceholder')}
+                className="flex-1 min-w-0 h-11 px-3 text-base rounded-md"
+                enterKeyHint="send"
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                data-testid="send-button"
+                className="h-11 min-w-[44px] px-3 md:px-4 bg-[#00E5FF] text-black rounded-md font-medium text-sm flex items-center justify-center gap-2 active:brightness-90 transition disabled:opacity-40 shrink-0"
+                disabled={!draft.trim()}
+                aria-label={t('send')}
+              >
+                <PaperPlaneTilt size={18} weight="fill" />
+                <span className="send-label hidden sm:inline">{t('send').toUpperCase()}</span>
+              </button>
+            </form>
+          </>
+        )}
+      </main>
+
+      {/* Search modal */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-xl flex items-start justify-center pt-24 px-4" onClick={() => setSearchOpen(false)}>
+          <div className="w-full max-w-md bg-[#121212] tac-border rounded-md p-4 fade-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-mono text-xs tracking-[0.25em]">{t('newChatTitle')}</h3>
+              <button onClick={() => setSearchOpen(false)} className="text-[#A1A1AA] hover:text-white" data-testid="close-search"><X size={16} /></button>
+            </div>
+            <p className="text-[11px] text-[#A1A1AA] mb-3 normal-case tracking-normal">
+              {t('newChatHint')}
+            </p>
+            <div className="flex items-center gap-2 bg-[#1A1A1A] rounded-md px-3 py-2 tac-border">
+              <MagnifyingGlass size={14} className="text-[#A1A1AA]" />
+              <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder={t('searchUsername')}
+                data-testid="search-input" className="bg-transparent flex-1 outline-none border-0 text-sm" autoFocus />
+            </div>
+            <div className="mt-3 max-h-80 overflow-y-auto">
+              {searchQ.length < 2 && (
+                <div className="px-3 py-6 text-center text-[11px] font-mono text-[#A1A1AA] tracking-wider">{t('type2chars')}</div>
+              )}
+              {searchResults.map((u) => {
+                const isContact = myContacts.some(c => c.user_id === u.user_id && !c.blocked);
+                const isMuted = myContacts.some(c => c.user_id === u.user_id && c.muted);
+                const requestSent = outgoingRequests.some((r) => r.to_user_id === u.user_id);
+                return (
+                  <button key={u.user_id} onClick={() => startConversation(u)} data-testid={`search-result-${u.username}`}
+                    className="w-full text-left px-3 py-2 rounded-md hover:bg-[#1A1A1A] flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-md bg-[#232323] flex items-center justify-center font-mono text-xs">
+                      {u.username.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm">@{u.username} {isContact && '✓'} {isMuted && `(${t('muted')})`}</div>
+                      <div className="text-[10px] font-mono text-[#A1A1AA]">
+                        {isContact ? t('tapToMessage') : requestSent ? t('requestSentLabel') : t('tapToAdd')}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {searchQ.length >= 2 && searchResults.length === 0 && (
+                <div className="px-3 py-6 text-center text-[11px] font-mono text-[#A1A1AA] tracking-wider">{t('noUsersFound')}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlock private key */}
+      {unlockOpen && user?.encrypted_private_key && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+          <form onSubmit={submitUnlock} className="w-full max-w-sm bg-[#121212] tac-border rounded-md p-5 fade-up">
+            <h3 className="font-mono text-sm tracking-[0.25em]">{t('unlockVault')}</h3>
+            <p className="text-xs text-[#A1A1AA] mt-2">{t('unlockVaultHint')}</p>
+            <input
+              type="password"
+              value={unlockPwd}
+              onChange={(e) => { setUnlockPwd(e.target.value); setUnlockErr(''); }}
+              placeholder="••••••••"
+              className="w-full mt-4 px-3 py-2.5 text-sm"
+              autoComplete="current-password"
+              data-testid="unlock-password-input"
+            />
+            {unlockErr && (
+              <p className="mt-2 text-xs text-[#FF3B30] font-mono" data-testid="unlock-error">{unlockErr}</p>
+            )}
+            <button
+              type="button"
+              onClick={submitUnlock}
+              disabled={unlockBusy || !unlockPwd.trim()}
+              data-testid="unlock-submit-button"
+              className="w-full mt-3 py-2.5 bg-[#00E5FF] text-black font-medium text-sm rounded-md hover:brightness-110 transition disabled:opacity-40 active:brightness-90"
+            >
+              {unlockBusy ? '…' : t('unlockSubmit')}
+            </button>
+            <button type="button" onClick={() => setUnlockOpen(false)} data-testid="unlock-cancel"
+              className="w-full mt-2 py-2 text-xs font-mono text-[#A1A1AA] hover:text-white active:text-white">{t('unlockSkip')}</button>
+          </form>
+        </div>
+      )}
+
+      {/* Incoming call ring */}
+      {callState && callState.direction === 'incoming' && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-24 h-24 rounded-md bg-[#232323] mx-auto flex items-center justify-center font-mono text-2xl mb-4">
+              {callState.peer.username?.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="font-mono text-lg">@{callState.peer.username}</div>
+            <div className="text-xs font-mono text-[#A1A1AA] tracking-widest mt-1">{callState.mode === 'video' ? t('incomingVideoCall') : t('incomingAudioCall')}</div>
+            <div className="mt-8 flex items-center justify-center gap-4">
+              <button onClick={rejectCall} data-testid="call-reject-button" className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110">
+                <Phone size={22} weight="fill" className="rotate-[135deg]" />
+              </button>
+              <button onClick={acceptCall} data-testid="call-accept-button" className="w-14 h-14 rounded-full bg-[#34C759] flex items-center justify-center hover:brightness-110">
+                <Phone size={22} weight="fill" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active call */}
+      {callState && callState.direction !== 'incoming' && (
+        <CallModal mode={callState.mode} direction={callState.direction === 'incoming-accepted' ? 'incoming' : 'outgoing'}
+          peer={callState.peer} socket={socketRef.current} signal={callState.signal}
+          onClose={() => setCallState(null)} />
+      )}
+
+      <ContactsModal
+        open={contactsOpen}
+        onClose={() => setContactsOpen(false)}
+        contacts={myContacts}
+        pendingRequests={pendingRequests}
+        outgoingRequests={outgoingRequests}
+        onAddUser={sendFriendRequest}
+        onAccept={acceptRequest}
+        onReject={rejectRequest}
+        onMessage={async (c) => {
+          try {
+            const { data } = await api.post('/conversations', { peer_username: c.username });
+            await loadConversations();
+            goToConversation(data.conversation_id);
+            setContactsOpen(false);
+          } catch (e) {
+            toast.error(e?.response?.data?.detail || t('couldNotOpenChat'));
+          }
+        }}
+        onToggleBlock={toggleBlock}
+        onToggleMute={toggleMute}
+        onRemove={removeContact}
+        onUseInvite={useInvite}
+        inviteToken={inviteToken}
+        setInviteToken={setInviteToken}
+        onGenerateInvite={generateInvite}
+      />
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CreateGroupModal open={groupOpen} onClose={() => setGroupOpen(false)} myUserId={user?.user_id}
+        onCreated={(c) => { loadConversations(); goToConversation(c.conversation_id); }} />
+
+      {storyGroup && (
+        <StoryViewer group={storyGroup} me={user} privateKey={privateKey} onClose={() => setStoryGroup(null)} />
+      )}
+      {groupCallState && groupCallState.direction === 'incoming' && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-24 h-24 rounded-md bg-[#1E2A38] mx-auto flex items-center justify-center mb-4">
+              <UsersThree size={28} className="text-[#00E5FF]" weight="duotone" />
+            </div>
+            <div className="font-mono text-lg">{t('groupCall')}</div>
+            <div className="text-xs font-mono text-[#A1A1AA] tracking-widest mt-1">
+              {t('groupCallIncoming', { mode: groupCallState.mode.toUpperCase(), count: String(groupCallState.members.length + 1) })}
+            </div>
+            <div className="mt-8 flex items-center justify-center gap-4">
+              <button onClick={rejectGroupCall} data-testid="group-call-reject" className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110">
+                <Phone size={22} weight="fill" className="rotate-[135deg]" />
+              </button>
+              <button onClick={() => setGroupCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s)} data-testid="group-call-accept" className="w-14 h-14 rounded-full bg-[#34C759] flex items-center justify-center hover:brightness-110">
+                <Phone size={22} weight="fill" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {groupCallState && groupCallState.direction !== 'incoming' && (
+        <GroupCallModal mode={groupCallState.mode}
+          direction={groupCallState.direction === 'incoming-accepted' ? 'incoming' : 'outgoing'}
+          members={groupCallState.members} me={user} socket={socketRef.current} signal={groupCallState.signal}
+          onClose={() => setGroupCallState(null)} />
+      )}
+    </div>
+  );
+}

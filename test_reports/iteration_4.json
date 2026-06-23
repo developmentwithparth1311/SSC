@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 4 backend test PASSED. Added /app/backend/tests/test_ssc_iteration3.py (21 new tests) covering: /api/config version 0.3, encrypted_keys participant-coverage validation for POST /messages (DM + group), /api/contacts (empty, after DM, dedup with group), full statuses CRUD (POST/GET/viewed/DELETE) with E2E key-gated visibility, statuses TTL index, WebSocket 'status-new' notification, and WebSocket call-offer 'group: true' + 'members' passthrough. Combined with iteration-1 (35) + iteration-2 (23) suites: 79/79 GREEN in 58.25s. Iteration-1/2 unchanged — they already supplied full encrypted_keys for every participant so the stricter validation did not break them.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /statuses/viewed", "issue": "Always returns 200 even if status_id is unknown or the caller is not a recipient (silent no-op). Consider 404 when no document matched to give clients better feedback."},
+      {"endpoint": "POST /messages", "issue": "encrypted_keys is now validated for participant coverage, but the values are not length-bounded — a client could submit arbitrarily large wrapped-key strings. Consider per-key max length in Pydantic."},
+      {"endpoint": "GET /statuses", "issue": "Returns full encrypted_keys map (every recipient user_id) to every authorized viewer, leaking the recipient list for a status. If recipient-list privacy matters, project encrypted_keys to only the requester's own entry."},
+      {"endpoint": "WS /api/ws", "issue": "WebSocket call signaling forwarder trusts arbitrary fields from sender (group, members, sdp, mode). Acceptable for a thin relay, but no validation that sender belongs to the 'members' group — a malicious client could spoof groups. Mitigation: cross-check members against a real conversation/group."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ssc_backend.py",
+    "/app/backend/tests/test_ssc_iteration2.py",
+    "/app/backend/tests/test_ssc_iteration3.py",
+    "/app/test_reports/pytest/iter4_results.xml"
+  ],
+  "action_items": [
+    "Non-blocking: project encrypted_keys in GET /statuses to only return the requester's own wrapped-key entry (privacy hardening — currently every recipient sees the full recipient set).",
+    "Non-blocking: return 404 from POST /statuses/viewed when no matching status (currently always 200, hides typos/unauthorized viewers).",
+    "Non-blocking: bound encrypted_keys value length and total dict size in Pydantic for POST /messages and POST /statuses.",
+    "Non-blocking: server.py is 1082 lines — still exceeds 700-line guideline; split into modules.",
+    "Non-blocking: validate WS call-offer 'members' against an actual group conversation to prevent spoofing."
+  ],
+  "critical_code_review_comments": [
+    "POST /messages encrypted_keys validation correctly checks `uid in body.encrypted_keys` for every participant in conv['participants'] — order-independent, safe.",
+    "POST /statuses correctly enforces author presence in encrypted_keys (returns 400 with detail 'encrypted_keys must include author').",
+    "GET /statuses uses Mongo dot-notation `encrypted_keys.{uid}: {$exists: true}` — efficient and correctly gated to addressed recipients only.",
+    "POST /statuses/viewed uses $addToSet with the same gating filter so non-recipients silently no-op — correct behaviour for privacy, but loses ability to detect typos. Returning 404 on no-match would be friendlier.",
+    "WS endpoint forwards entire data dict for call-* events (`payload = {**data, 'from': user_id}`) — so 'group', 'mode', 'members' all flow through automatically. Verified by test_ws_call_offer_group_passthrough.",
+    "status-new WS payload only includes status_id + author_id + author_username (no ciphertext) — good privacy design; recipients pull the full status via GET /statuses.",
+    "Statuses TTL index `expireAfterSeconds=0` on expires_at confirmed via listIndexes — 24h auto-expiry works.",
+    "server.py is 1082 lines — exceeds 700-line guideline; split into modules (auth, statuses, conversations, ws) is recommended.",
+    "GET /statuses returns the entire encrypted_keys dict to every viewer — every recipient can enumerate the other recipients. Consider $ projection to expose only the caller's key."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ssc_iteration3.py (NEW — 21 tests: config v0.3, encrypted_keys validation, contacts, statuses CRUD + viewers + TTL, WS status-new, WS call-offer group passthrough)"
+  ],
+  "success_rate": {"backend": "100% (79/79)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "Iter1 alic<sfx>/bobt<sfx>/evet<sfx>; Iter2 i2u1<sfx>/i2u2<sfx>/i2u3<sfx>; Iter3 i3a<sfx>/i3b<sfx>/i3c<sfx>/i3d<sfx>. SUFFIX is a per-run uuid hex[:4]. Iter3 uses dedicated X-Forwarded-For IPs (10.3.0.20-23) so the per-IP register rate-limit (5/hr) doesn't trip.",
+  "seed_data_creation": "No persistent seed. Each run registers fresh UUID-suffixed users and creates short-lived conversations/statuses; statuses TTL deletes within 24h server-side.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run order: test_ssc_backend.py → test_ssc_iteration2.py → test_ssc_iteration3.py. Iter2 ends with rate-limit tests that consume 6 register attempts on IP 99.99.99.99 and 11 login attempts on 99.99.99.100 — iter3 uses different IPs (10.3.0.x) so the rate-limit bucket doesn't bite. Always `sudo supervisorctl restart backend && sleep 4` before re-running to reset in-memory rate-limit buckets. Pytest cmd: `python -m pytest backend/tests/ -v --junitxml=/app/test_reports/pytest/iter{n}_results.xml`. /api/config.version is currently '0.3' — bump expectation in the test if version changes.",
+  "rca of the issue": "No issue — iteration 3 features (encrypted_keys validation, statuses, group call passthrough) are implemented correctly and all 79 tests (58 regression + 21 new) pass. Two minor design notes worth raising in a future iteration: (1) GET /statuses leaks recipient list via the full encrypted_keys map; (2) POST /statuses/viewed silently no-ops on bad status_id rather than returning 404."
+}
