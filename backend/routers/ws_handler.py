@@ -35,7 +35,8 @@ def register_websocket(app):
             return
         await manager.connect(user_id, ws)
         logger.info(f"WS connected user={user_id}")
-        await db.users.update_one({"user_id": user_id}, {"$set": {"last_seen": iso(now_utc())}})
+        from core.last_seen import touch_last_seen
+        await touch_last_seen(db, user_id)
         try:
             await ws.send_text(json.dumps({"type": "connected", "user_id": user_id}))
             while True:

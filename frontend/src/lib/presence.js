@@ -16,7 +16,23 @@ export function formatLastSeen(lastSeen) {
   return `last seen ${d}d ago`;
 }
 
+/** Peer online — prefer server `online` flag (Engine 4); fall back to last_seen. */
+export function isPeerOnline(peerOrLastSeen) {
+  if (peerOrLastSeen && typeof peerOrLastSeen === 'object') {
+    if (peerOrLastSeen.online === true) return true;
+    if (peerOrLastSeen.online === false) return false;
+    return isOnline(peerOrLastSeen.last_seen);
+  }
+  return isOnline(peerOrLastSeen);
+}
+
 export function isOnline(lastSeen) {
   if (!lastSeen) return false;
   return Date.now() - new Date(lastSeen).getTime() < 5 * 60 * 1000;
+}
+
+export function formatPeerPresence(peer) {
+  if (!peer) return 'offline';
+  if (isPeerOnline(peer)) return 'online now';
+  return formatLastSeen(peer.last_seen);
 }

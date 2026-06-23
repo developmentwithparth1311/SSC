@@ -10,6 +10,7 @@ from core.logging_config import logger
 from core.models import CreateConversationIn
 from core.push_helpers import send_push_for_group_added
 from core.realtime import manager
+from core.last_seen import project_user_for_peer
 from core.conversation_meta import (
     last_activity_from_message,
     peer_summary,
@@ -98,6 +99,7 @@ async def create_conversation(body: CreateConversationIn, current=Depends(get_cu
             {"conversation_id": existing["conversation_id"]}, {"_id": 0},
         )
         base = refreshed or existing
+        base["peer"] = peer_summary(peer)
         return sanitize_conversation_for_api(base, current["user_id"])
     created = now_utc()
     conv = {
@@ -107,6 +109,7 @@ async def create_conversation(body: CreateConversationIn, current=Depends(get_cu
         "created_at": iso(created),
         "created_by": current["user_id"],
         **conversation_activity_fields(created),
+        "peer": peer_summary(peer),
     }
     await db.conversations.insert_one(conv)
     conv.pop("_id", None)
@@ -133,12 +136,12 @@ async def list_conversations(current=Depends(get_current_user)):
     for c in convs:
         is_group = bool(c.get("is_group"))
         if is_group:
-            members = [peers_by_id.get(p) for p in c["participants"] if p != me]
+            members = [project_user_for_peer(peers_by_id.get(p)) for p in c["participants"] if p != me]
             c["members"] = [m for m in members if m]
             c["peer"] = None
         else:
             peer_id = next((p for p in c["participants"] if p != me), None)
-            c["peer"] = peers_by_id.get(peer_id) if peer_id else None
+            c["peer"] = project_user_for_peer(peers_by_id.get(peer_id)) if peer_id else None
         last_msg = await db.messages.find_one(
             {"conversation_id": c["conversation_id"]},
             {"_id": 0, "created_at": 1, "message_type": 1},

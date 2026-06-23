@@ -56,7 +56,7 @@ This charter defines:
 
 **Never store on user row:** decrypted private key, TOTP secret in API responses, message text.
 
-**Target:** `last_seen` optional TTL or coarsening in Engine 4 (metadata minimization).
+**Enforced (Engine 4):** `last_seen` write throttle, 7d TTL, peer coarsening — `core/last_seen.py`.
 
 ---
 
@@ -69,7 +69,7 @@ This charter defines:
 | MongoDB | `contacts` | **Persistent** (panic may keep — wife scenario) | `user_id`, `contact_id`, `blocked`, `muted`, `created_at` | **Who you know** |
 | MongoDB | `friend_requests` | **Pending:** 7d TTL; **accepted/rejected:** purge 24h after resolution (step 1.3) | `request_id`, user ids, usernames, `status`, `created_at` | Request history |
 
-**Charter decision (v1.0):** Contacts **remain** until user removes them — required for app function and panic UX. Documented as accepted metadata tradeoff until Engine 4.
+**Charter decision (v1.0, Engine 4.6):** Contacts **remain** until user removes them — required for app function and panic UX. **Accepted metadata tradeoff** — see `METADATA_MINIMIZATION_CHARTER.md`.
 
 ---
 
@@ -122,7 +122,7 @@ This charter defines:
 | MongoDB | `push_subscriptions` | Until unsubscribe/logout/panic | ✅ panic wipes |
 | MongoDB | `native_push_tokens` | Until unregister/logout/panic | ✅ panic wipes |
 
-**Push payload rule (target Engine 4):** No message text in notification body — generic “new activity” only.
+**Push payload rule (Engine 4):** Generic title/body only (`SSC` / `New activity`) — `core/push_payload.py`.
 
 ---
 

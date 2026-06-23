@@ -86,9 +86,9 @@ E2E_SURFACES: Dict[str, E2ESurface] = {
     "push": E2ESurface(
         name="push",
         status=E2EStatus.PARTIAL,
-        server_sees="generic notification text, device tokens",
+        server_sees="generic notification text, device tokens, opaque routing ids",
         engine2_step=None,
-        notes="No message ciphertext in payloads.",
+        notes="Generic title/body enforced in Engine 4; no message ciphertext.",
     ),
 }
 

@@ -19,7 +19,7 @@ This charter defines:
 - Gaps between **today's code** and **target**
 - Enforcement steps 3.2–3.7
 
-**Rule:** Engine 3 complete (3.7 gate passed 2026-06-23). Engine 4 may proceed per `RETENTION_CHARTER.md`.
+**Rule:** Engine 3 complete (3.7 gate passed 2026-06-23). Engine 4 complete (4.7 gate passed 2026-06-23) — see `METADATA_MINIMIZATION_CHARTER.md`.
 
 **Prerequisites:**
 - Engine 1 complete (`memory/RETENTION_CHARTER.md` + gate passed)

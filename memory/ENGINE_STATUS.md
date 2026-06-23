@@ -11,9 +11,15 @@
 | 2 E2E integrity | `scripts/run_engine2_gate.py` | Included in 303 total |
 | 3 Client footprint | `scripts/run_engine3_gate.py` | 61 unit + 4 integration + proof |
 
-## Next: Engine 4
+## Complete (continued)
 
-Metadata minimization — see `RETENTION_CHARTER.md` (last_seen, push payloads, contacts review).
+| Engine | Gate command | Tests (23 Jun) |
+|--------|--------------|----------------|
+| 4 Metadata minimization | `scripts/run_engine4_gate.py` | 30 unit + 4 integration + proof (333 total pytest) |
+
+## Next: Engine 5
+
+Session hardening — JWT off localStorage (C8).
 
 ## Open deferred gaps
 

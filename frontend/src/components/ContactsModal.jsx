@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { X, BellSlash, Prohibit, Trash, ChatCircle, MagnifyingGlass, CaretDown, CaretUp } from '@phosphor-icons/react';
-import { formatLastSeen, isOnline } from '../lib/presence';
+import { formatPeerPresence, isPeerOnline } from '../lib/presence';
 import { api } from '../lib/api';
 import { useLocale } from '../context/LocaleContext';
 
@@ -113,14 +113,14 @@ export default function ContactsModal({
     <div key={c.user_id} className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-[#1A1A1A] group" data-testid={`contact-row-${c.username}`}>
       <div className="w-9 h-9 rounded-md bg-[#232323] flex items-center justify-center font-mono text-xs relative shrink-0">
         {c.username?.slice(0, 2).toUpperCase()}
-        {isOnline(c.last_seen) && (
+        {isPeerOnline(c) && (
           <div className="absolute bottom-0 right-0 w-2 h-2 bg-[#34C759] rounded-full tac-border" />
         )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm truncate">@{c.username}</div>
         <div className="text-[10px] font-mono text-[#A1A1AA] truncate">
-          {formatLastSeen(c.last_seen)}
+          {formatPeerPresence(c)}
           {c.muted && !showBlockedActions ? ` · ${t('muted')}` : ''}
         </div>
       </div>

@@ -60,24 +60,19 @@ def _init_firebase() -> bool:
 
 
 def _flatten_data(payload: dict) -> Dict[str, str]:
-    """FCM data payloads must be string key/value pairs."""
+    """FCM data payloads must be string key/value pairs (Engine 4 — sanitized routing only)."""
+    from core.metadata_policy import GENERIC_PUSH_BODY, GENERIC_PUSH_TITLE
+    from core.push_payload import sanitize_push_data
+
     inner = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    out = {
-        "type": str(payload.get("type") or "message"),
-        "title": str(payload.get("title") or "SSC"),
-        "body": str(payload.get("body") or ""),
-        "tag": str(payload.get("tag") or ""),
-        "silent": "1" if payload.get("silent") else "0",
-    }
+    merged = {**inner, "type": payload.get("type") or inner.get("type")}
     if payload.get("conversation_id"):
-        out["conversation_id"] = str(payload["conversation_id"])
-    for key, val in inner.items():
-        if val is None:
-            continue
-        if isinstance(val, bool):
-            out[key] = "1" if val else "0"
-        else:
-            out[key] = str(val)
+        merged["conversation_id"] = payload["conversation_id"]
+    out = sanitize_push_data(merged)
+    out["title"] = str(payload.get("title") or GENERIC_PUSH_TITLE)
+    out["body"] = str(payload.get("body") or GENERIC_PUSH_BODY)
+    out["tag"] = str(payload.get("tag") or "")
+    out["silent"] = "1" if payload.get("silent") else "0"
     return out
 
 

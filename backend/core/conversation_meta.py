@@ -46,16 +46,8 @@ def project_message_for_viewer(msg: dict, viewer_id: str) -> dict:
 
 
 def peer_summary(user: Optional[dict]) -> Optional[dict]:
-    if not user:
-        return None
-    return {
-        "user_id": user.get("user_id"),
-        "username": user.get("username"),
-        "language": user.get("language"),
-        "public_key": user.get("public_key"),
-        "avatar": user.get("avatar"),
-        "last_seen": user.get("last_seen"),
-    }
+    from core.last_seen import project_user_for_peer
+    return project_user_for_peer(user)
 
 
 def sanitize_conversation_for_api(conv: dict, viewer_id: str) -> dict:

@@ -134,6 +134,8 @@ async def list_contacts(current=Depends(get_current_user)):
     contact_ids = [c["contact_id"] for c in contact_docs]
     if not contact_ids:
         return []
+    from core.last_seen import project_user_for_peer
+
     users = await db.users.find(
         {"user_id": {"$in": contact_ids}},
         {"_id": 0, "user_id": 1, "username": 1, "avatar": 1, "public_key": 1, "last_seen": 1},
@@ -141,7 +143,7 @@ async def list_contacts(current=Depends(get_current_user)):
     user_map = {u["user_id"]: u for u in users}
     result = []
     for doc in contact_docs:
-        u = user_map.get(doc["contact_id"])
+        u = project_user_for_peer(user_map.get(doc["contact_id"]))
         if u:
             result.append({
                 **u,

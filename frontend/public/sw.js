@@ -1,6 +1,8 @@
 /* SSC service worker — push notifications + offline shell */
 const CACHE = 'ssc-v1';
 const PURGE_CACHES_MESSAGE = 'SSC_PURGE_CACHES';
+const GENERIC_TITLE = 'SSC';
+const GENERIC_BODY = 'New activity';
 
 self.addEventListener('message', (event) => {
   if (event.data?.type !== PURGE_CACHES_MESSAGE) return;
@@ -18,15 +20,16 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'SSC', body: 'New encrypted message' };
+  let payload = { title: GENERIC_TITLE, body: GENERIC_BODY };
   try { if (event.data) payload = { ...payload, ...event.data.json() }; } catch {}
-  const type = payload.type || 'message';
+  const type = payload.type || payload.data?.type || 'message';
+  const data = payload.data || { conversation_id: payload.conversation_id || null, type };
   let options = {
-    body: payload.body,
+    body: GENERIC_BODY,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     tag: payload.tag || 'ssc-message',
-    data: payload.data || { conversation_id: payload.conversation_id || null },
+    data: { ...data, type },
     vibrate: [80, 40, 80],
     renotify: true,
   };
@@ -34,31 +37,26 @@ self.addEventListener('push', (event) => {
     options.silent = true;
   }
   if (type === 'call') {
-    options.body = payload.body || 'Incoming call';
     options.tag = payload.tag || 'ssc-call';
     options.vibrate = [200, 100, 200, 100, 200];
-    options.requireInteraction = true;  // keep on screen for calls
-    options.data = { ...options.data, type: 'call', mode: payload.data?.mode || 'audio' };
+    options.requireInteraction = true;
+    options.data = { ...options.data, type: 'call', mode: data.mode || 'audio' };
     options.actions = [
       { action: 'answer', title: 'Answer' },
       { action: 'decline', title: 'Decline' }
     ];
   } else if (type === 'friend_request') {
-    options.body = payload.body || 'New friend request';
     options.tag = payload.tag || 'ssc-friend';
   } else if (type === 'friend_accept') {
-    options.body = payload.body || 'Friend request accepted';
     options.tag = payload.tag || 'ssc-friend-accept';
   } else if (type === 'status') {
-    options.body = payload.body || 'Posted a new status';
     options.tag = payload.tag || 'ssc-status';
-    options.data = { ...options.data, type: 'status', ...payload.data };
+    options.data = { ...options.data, type: 'status' };
   } else if (type === 'group_event') {
-    options.body = payload.body || 'Group update';
     options.tag = payload.tag || 'ssc-group';
-    options.data = { ...options.data, type: 'group_event', ...payload.data };
+    options.data = { ...options.data, type: 'group_event' };
   }
-  event.waitUntil(self.registration.showNotification(payload.title, options));
+  event.waitUntil(self.registration.showNotification(GENERIC_TITLE, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -68,7 +66,6 @@ self.addEventListener('notificationclick', (event) => {
   let target = '/chat';
   if (data.type === 'call') {
     target = data.conversation_id ? `/chat/${data.conversation_id}` : '/chat';
-    // Post message to frontend to handle call (answer/decline or open)
     event.waitUntil((async () => {
       const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const c of all) {

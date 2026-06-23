@@ -9,6 +9,16 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from core.push_payload import (
+    ACTIVITY_CALL,
+    ACTIVITY_FRIEND_ACCEPT,
+    ACTIVITY_FRIEND_REQUEST,
+    ACTIVITY_GROUP_EVENT,
+    ACTIVITY_MESSAGE,
+    ACTIVITY_STATUS,
+    build_generic_push,
+)
+
 _logger = logging.getLogger("ssc")
 
 # Will be set by server
@@ -69,24 +79,11 @@ async def send_push(recipients: list, payload: dict, sender_id: str = None):
 
 async def send_push_for_message(conv: dict, sender: dict, msg: dict):
     recipients = [u for u in conv["participants"] if u != sender["user_id"]]
-    if conv.get("is_group"):
-        title = "Group chat"
-    else:
-        title = f"@{sender['username']}"
-    body_text = "New encrypted message"
-    if msg.get("message_type") == "image":
-        body_text = "Sent a photo"
-    elif msg.get("message_type") == "file":
-        body_text = "Sent a file"
-    elif msg.get("message_type") == "voice":
-        body_text = "Sent a voice note"
-    payload = {
-        "title": title, "body": body_text,
-        "conversation_id": conv["conversation_id"],
-        "tag": conv["conversation_id"],
-        "type": "message",
-        "data": {"conversation_id": conv["conversation_id"]},
-    }
+    payload = build_generic_push(
+        ACTIVITY_MESSAGE,
+        conversation_id=conv["conversation_id"],
+        tag=conv["conversation_id"],
+    )
     await send_push(recipients, payload, sender["user_id"])
 
 async def send_push_for_call(to_user: str, from_user: dict, mode: str = "audio", conv_id: str = None, group: bool = False):
@@ -94,24 +91,17 @@ async def send_push_for_call(to_user: str, from_user: dict, mode: str = "audio",
         return
     if to_user in manager.user_sockets:
         return
-    title = f"Incoming {mode} call"
-    body_text = f"from @{from_user.get('username', 'user')}"
-    if group:
-        body_text = f"Group {mode} call"
-    payload = {
-        "title": title,
-        "body": body_text,
-        "type": "call",
-        "data": {
+    payload = build_generic_push(
+        ACTIVITY_CALL,
+        conversation_id=conv_id,
+        tag=f"call-{to_user}",
+        extra_data={
             "mode": mode,
             "from": from_user.get("user_id"),
-            "conversation_id": conv_id,
             "group": group,
         },
-        "tag": f"call-{to_user}",
-        "vibrate": [200, 100, 200],
-        "renotify": True,
-    }
+        vibrate=[200, 100, 200],
+    )
     await send_push([to_user], payload, from_user.get("user_id"))
 
 async def send_push_for_friend_request(to_user_id: str, from_user: dict):
@@ -119,25 +109,21 @@ async def send_push_for_friend_request(to_user_id: str, from_user: dict):
         return
     if to_user_id in manager.user_sockets:
         return
-    payload = {
-        "title": "New friend request",
-        "body": f"from @{from_user.get('username', 'user')}",
-        "type": "friend_request",
-        "data": {"from": from_user.get("user_id")},
-        "tag": f"friend-{to_user_id}",
-    }
+    payload = build_generic_push(
+        ACTIVITY_FRIEND_REQUEST,
+        tag=f"friend-{to_user_id}",
+        extra_data={"from": from_user.get("user_id")},
+    )
     await send_push([to_user_id], payload, from_user.get("user_id"))
 
 async def send_push_for_friend_accept(to_user_id: str, from_user: dict):
     if db is None:
         return
-    payload = {
-        "title": "Friend request accepted",
-        "body": f"by @{from_user.get('username', 'user')}",
-        "type": "friend_accept",
-        "data": {"from": from_user.get("user_id")},
-        "tag": f"friend-accept-{to_user_id}",
-    }
+    payload = build_generic_push(
+        ACTIVITY_FRIEND_ACCEPT,
+        tag=f"friend-accept-{to_user_id}",
+        extra_data={"from": from_user.get("user_id")},
+    )
     await send_push([to_user_id], payload, from_user.get("user_id"))
 
 async def send_push_for_status(to_user_id: str, from_user: dict):
@@ -145,13 +131,11 @@ async def send_push_for_status(to_user_id: str, from_user: dict):
         return
     if to_user_id in manager.user_sockets:
         return
-    payload = {
-        "title": f"@{from_user.get('username', 'user')}",
-        "body": "Posted a new status",
-        "type": "status",
-        "data": {"from": from_user.get("user_id"), "author_username": from_user.get("username")},
-        "tag": f"status-{from_user.get('user_id')}",
-    }
+    payload = build_generic_push(
+        ACTIVITY_STATUS,
+        tag=f"status-{from_user.get('user_id')}",
+        extra_data={"from": from_user.get("user_id")},
+    )
     await send_push([to_user_id], payload, from_user.get("user_id"))
 
 async def send_push_for_group_added(to_user_id: str, from_user: dict, conv: dict):
@@ -159,16 +143,10 @@ async def send_push_for_group_added(to_user_id: str, from_user: dict, conv: dict
         return
     if to_user_id in manager.user_sockets:
         return
-    group_name = "Group chat"
-    payload = {
-        "title": "Added to group",
-        "body": f"@{from_user.get('username', 'user')} added you to {group_name}",
-        "type": "group_event",
-        "data": {
-            "conversation_id": conv.get("conversation_id"),
-            "from": from_user.get("user_id"),
-            "group_name": group_name,
-        },
-        "tag": f"group-{conv.get('conversation_id')}",
-    }
+    payload = build_generic_push(
+        ACTIVITY_GROUP_EVENT,
+        conversation_id=conv.get("conversation_id"),
+        tag=f"group-{conv.get('conversation_id')}",
+        extra_data={"from": from_user.get("user_id")},
+    )
     await send_push([to_user_id], payload, from_user.get("user_id"))

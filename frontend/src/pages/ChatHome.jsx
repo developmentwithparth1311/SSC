@@ -21,7 +21,7 @@ import MobileChatMenu, { MenuAction } from '../components/MobileChatMenu';
 import GroupCallModal from '../components/GroupCallModal';
 import { StoriesBar, StoryViewer } from '../components/Stories';
 import ContactsModal from '../components/ContactsModal';
-import { formatLastSeen, isOnline } from '../lib/presence';
+import { formatPeerPresence, isPeerOnline } from '../lib/presence';
 import { consumePendingInvite } from '../lib/invites';
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
 
@@ -749,7 +749,7 @@ export default function ChatHome() {
               className={`w-full text-left px-4 py-3 border-b border-[#27272A] flex items-center gap-3 hover:bg-[#1A1A1A] transition ${activeId === c.conversation_id ? 'bg-[#1A1A1A]' : ''}`}>
               <div className={`w-10 h-10 rounded-md flex items-center justify-center font-mono text-xs ${c.is_group ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
                 {c.is_group ? <UsersThree size={16} /> : (c.peer?.username?.slice(0, 2).toUpperCase() || '??')}
-                {!c.is_group && c.peer?.last_seen && (new Date() - new Date(c.peer.last_seen) < 5*60*1000) && (
+                {!c.is_group && isPeerOnline(c.peer) && (
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#34C759] rounded-full tac-border" />
                 )}
               </div>
@@ -801,7 +801,7 @@ export default function ChatHome() {
               <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
                 <div className={`w-9 h-9 rounded-md flex items-center justify-center font-mono text-xs shrink-0 ${isGroup ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
                   {isGroup ? <UsersThree size={16} /> : peer?.username?.slice(0, 2).toUpperCase()}
-                  {!isGroup && isOnline(peer?.last_seen) && (
+                  {!isGroup && isPeerOnline(peer) && (
                     <div className="absolute bottom-0 right-0 w-2 h-2 bg-[#34C759] rounded-full tac-border" />
                   )}
                 </div>
@@ -814,7 +814,7 @@ export default function ChatHome() {
                     <span className="truncate" data-testid="chat-peer-status">
                       {isGroup
                         ? `E2E · ${activeConv.participants.length} ${t('members')}`
-                        : `${peerVerified ? 'VERIFIED · ' : ''}${formatLastSeen(peer?.last_seen)} · ${peer?.language?.toUpperCase() || '—'}`}
+                        : `${peerVerified ? 'VERIFIED · ' : ''}${formatPeerPresence(peer)} · ${peer?.language?.toUpperCase() || '—'}`}
                     </span>
                   </div>
                 </div>

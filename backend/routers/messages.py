@@ -64,7 +64,8 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
     await bump_conversation_activity(body.conversation_id)
     msg["expires_at"] = iso(expires)
     msg.pop("_id", None)
-    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"last_seen": iso(now_utc())}})
+    from core.last_seen import touch_last_seen
+    await touch_last_seen(db, current["user_id"])
     await broadcast_message_to_conversation(body.conversation_id, msg)
     asyncio.create_task(send_push_for_message(conv, current, msg))
     return project_message_for_viewer(msg, current["user_id"])
