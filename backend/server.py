@@ -11,7 +11,7 @@ from core.config import CORS_ORIGINS, DB_NAME
 from core.database import client, db, grid_fs  # noqa: F401 — init side effects
 from core.logging_config import logger
 from core.realtime import manager  # noqa: F401 — wires push manager
-from lifespan import register_lifespan
+from lifespan import lifespan
 from middleware import setup_middleware
 from routers import include_routers
 from routers.ws_handler import register_websocket
@@ -20,11 +20,10 @@ from security import validate_environment
 validate_environment()
 logger.info(f"SSC starting — using database: {DB_NAME} (Mongo Atlas or local)")
 
-app = FastAPI(title="SSC - Super Secure Chat")
+app = FastAPI(title="SSC - Super Secure Chat", lifespan=lifespan)
 api = APIRouter(prefix="/api")
 
 setup_middleware(app)
-register_lifespan(app)
 include_routers(api)
 app.include_router(api)
 register_websocket(app)

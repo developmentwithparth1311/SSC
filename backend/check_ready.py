@@ -24,6 +24,21 @@ def main() -> int:
     ok("MONGO_URL set", bool(os.getenv("MONGO_URL")))
     ok("JWT_SECRET set", bool(os.getenv("JWT_SECRET")))
 
+    env = os.getenv("ENV", "development").lower()
+    redis_url = (os.getenv("REDIS_URL") or "").strip()
+    if env == "production":
+        ok("REDIS_URL set (production)", bool(redis_url))
+        redis_ok = False
+        if redis_url:
+            try:
+                import redis
+
+                client = redis.from_url(redis_url, decode_responses=True)
+                redis_ok = bool(client.ping())
+            except Exception:
+                redis_ok = False
+        ok("Redis reachable (production)", redis_ok)
+
     import native_push
 
     ok("Firebase Admin SDK loads", native_push.is_configured())

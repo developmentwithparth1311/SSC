@@ -113,6 +113,11 @@ Add your dev origins to `backend/.env`:
 CORS_ORIGINS=http://localhost:3000,http://192.168.1.154:3000,http://192.168.1.154:8000
 ```
 
+## Roadmap & security
+
+- **Single roadmap:** `memory/SSC-ROADMAP.md` (update after every step)
+- **Security model:** `memory/SECURITY_MODEL.md`
+
 ## Testing
 
 ```powershell

@@ -4,8 +4,11 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { getPendingInvite } from '../lib/invites';
 import { completeGoogleAuth } from '../lib/google-auth';
+import { api } from '../lib/api';
+import { isNativeApp } from '../lib/platform';
+import { persistSessionToken } from '../lib/sessionStore';
 
-/** Handles OAuth redirect: /auth/google?token=...&needs_setup=0|1 */
+/** Handles OAuth redirect: /auth/google?needs_setup=0|1 (web cookie) or ?token=… (native). */
 export default function GoogleAuthCallback() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -19,21 +22,27 @@ export default function GoogleAuthCallback() {
     const token = params.get('token');
     const needsSetup = params.get('needs_setup') === '1';
 
-    if (!token) {
-      toast.error('Google sign-in failed — no token');
-      navigate('/login');
-      return;
-    }
-
     (async () => {
       try {
-        localStorage.setItem('ssc_token', token);
-        const { api } = await import('../lib/api');
-        const { data: user } = await api.get('/auth/me');
-        await completeGoogleAuth(
-          { token, user, needs_username: needsSetup },
-          { loginWithToken, navigate, getPendingInvite },
-        );
+        if (isNativeApp()) {
+          if (!token) {
+            toast.error('Google sign-in failed — no token');
+            navigate('/login');
+            return;
+          }
+          persistSessionToken(token);
+          const { data: user } = await api.get('/auth/me');
+          await completeGoogleAuth(
+            { token, user, needs_username: needsSetup },
+            { loginWithToken, navigate, getPendingInvite },
+          );
+        } else {
+          const { data: user } = await api.get('/auth/me');
+          await completeGoogleAuth(
+            { token: null, user, needs_username: needsSetup },
+            { loginWithToken, navigate, getPendingInvite },
+          );
+        }
         toast.success('Signed in with Google');
       } catch {
         toast.error('Google sign-in failed');

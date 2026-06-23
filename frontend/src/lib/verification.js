@@ -1,70 +1,114 @@
 /**
- * Verification handshake — Engine 2 Step 2.6.
- * Verified state is bound to the canonical safety number and both public-key fingerprints.
- * Legacy `ssc_verified_{user_id}=1` flags are rejected and purged on startup.
+ * Verification handshake — Engine 2.6 + Engine 8.2 (safety numbers v3).
+ * Verified state is bound to canonical safety number and identity fingerprints.
  */
-import { publicKeyFingerprint } from './crypto';
+import { resolveUserIdentity, identityStorageFingerprint } from './identityKey';
+import {
+  computeSafetyNumberV3,
+  normalizeSafetyNumberInput,
+} from './safetyNumber';
 
 export const VERIFICATION_STORAGE_V2_PREFIX = 'ssc_verified_v2_';
 export const LEGACY_VERIFICATION_PREFIX = 'ssc_verified_';
-export const VERIFICATION_RECORD_VERSION = 1;
+export const VERIFICATION_RECORD_VERSION = 3;
 
-function normalizeFingerprintHex(fp) {
-  return (fp || '').replace(/\s/g, '').toUpperCase();
+function parsePublicKeyJwk(publicKeyField) {
+  return resolveUserIdentity({ public_key: publicKeyField })?.jwk
+    || (typeof publicKeyField === 'object' ? publicKeyField : null);
 }
 
+/** @deprecated Use computeSafetyNumberForUsers */
 export async function computeSafetyNumber(myPubJwk, peerPubJwk) {
-  const a = await publicKeyFingerprint(myPubJwk);
-  const b = await publicKeyFingerprint(peerPubJwk);
-  const [first, second] = normalizeFingerprintHex(a) < normalizeFingerprintHex(b) ? [a, b] : [b, a];
-  const combined = (normalizeFingerprintHex(first) + normalizeFingerprintHex(second)).slice(0, 60);
-  const blocks = [];
-  for (let i = 0; i < 60; i += 5) blocks.push(combined.slice(i, i + 5));
-  return { display: blocks.join(' '), canonical: combined };
+  return computeSafetyNumberForUsers(
+    { public_key: myPubJwk },
+    'local',
+    { public_key: peerPubJwk },
+    'peer',
+  );
+}
+
+export async function computeSafetyNumberForUsers(me, myUserId, peer, peerUserId) {
+  const myIdentity = resolveUserIdentity(me);
+  const peerIdentity = resolveUserIdentity(peer);
+  if (!myIdentity || !peerIdentity) {
+    throw new Error('missing identity keys');
+  }
+  return computeSafetyNumberV3(myIdentity, myUserId, peerIdentity, peerUserId);
 }
 
 export function verificationStorageKey(peerUserId) {
   return `${VERIFICATION_STORAGE_V2_PREFIX}${peerUserId}`;
 }
 
-export async function markPeerVerified(peerUserId, myPubJwk, peerPubJwk) {
-  const myFp = normalizeFingerprintHex(await publicKeyFingerprint(myPubJwk));
-  const peerFp = normalizeFingerprintHex(await publicKeyFingerprint(peerPubJwk));
-  const { canonical } = await computeSafetyNumber(myPubJwk, peerPubJwk);
-  const record = {
+async function buildVerificationRecord(peerUserId, me, myUserId, peer) {
+  const myIdentity = resolveUserIdentity(me);
+  const peerIdentity = resolveUserIdentity(peer);
+  const { canonical, keyType } = await computeSafetyNumberForUsers(me, myUserId, peer, peerUserId);
+  return {
     v: VERIFICATION_RECORD_VERSION,
+    key_type: keyType,
     safety_number: canonical,
-    peer_fingerprint: peerFp,
-    my_fingerprint: myFp,
+    peer_identity: identityStorageFingerprint(peerIdentity),
+    my_identity: identityStorageFingerprint(myIdentity),
     verified_at: new Date().toISOString(),
   };
-  localStorage.setItem(verificationStorageKey(peerUserId), JSON.stringify(record));
-  localStorage.removeItem(`${LEGACY_VERIFICATION_PREFIX}${peerUserId}`);
+}
+
+export async function markPeerVerified(peerUserId, meOrMyPub, peerOrPeerPub, myUserId, peerUser) {
+  let me = meOrMyPub;
+  let peer = peerOrPeerPub;
+  let myId = myUserId;
+  let peerId = peerUser?.user_id || peerUserId;
+
+  if (!myUserId && meOrMyPub?.n) {
+    me = { public_key: meOrMyPub };
+    peer = { public_key: peerOrPeerPub };
+    myId = 'local';
+    peerId = peerUserId;
+  }
+
+  const record = await buildVerificationRecord(peerId, me, myId, peer);
+  localStorage.setItem(verificationStorageKey(peerId), JSON.stringify(record));
+  localStorage.removeItem(`${LEGACY_VERIFICATION_PREFIX}${peerId}`);
   window.dispatchEvent(new Event('ssc-verified-change'));
   return record;
 }
 
-export async function isPeerVerified(peerUserId, myPubJwk, peerPubJwk) {
-  if (!peerUserId || !myPubJwk || !peerPubJwk) return false;
+export async function isPeerVerified(peerUserId, meOrMyPub, peerOrPeerPub, myUserId, peerUser) {
+  let me = meOrMyPub;
+  let peer = peerOrPeerPub;
+  let myId = myUserId;
+  let peerId = peerUser?.user_id || peerUserId;
 
-  const legacy = localStorage.getItem(`${LEGACY_VERIFICATION_PREFIX}${peerUserId}`);
+  if (!myUserId && meOrMyPub?.n) {
+    me = { public_key: meOrMyPub };
+    peer = { public_key: peerOrPeerPub };
+    myId = 'local';
+    peerId = peerUserId;
+  }
+
+  if (!peerId || !me || !peer) return false;
+
+  const legacy = localStorage.getItem(`${LEGACY_VERIFICATION_PREFIX}${peerId}`);
   if (legacy === '1') return false;
 
-  const raw = localStorage.getItem(verificationStorageKey(peerUserId));
+  const raw = localStorage.getItem(verificationStorageKey(peerId));
   if (!raw) return false;
 
   try {
     const record = JSON.parse(raw);
-    if (record.v !== VERIFICATION_RECORD_VERSION || !record.safety_number) return false;
+    if (!record.safety_number) return false;
+    if (record.v !== VERIFICATION_RECORD_VERSION) return false;
 
-    const myFp = normalizeFingerprintHex(await publicKeyFingerprint(myPubJwk));
-    const peerFp = normalizeFingerprintHex(await publicKeyFingerprint(peerPubJwk));
-    const { canonical } = await computeSafetyNumber(myPubJwk, peerPubJwk);
+    const myIdentity = resolveUserIdentity(me);
+    const peerIdentity = resolveUserIdentity(peer);
+    const { canonical } = await computeSafetyNumberForUsers(me, myId, peer, peerId);
 
     return (
-      record.safety_number === canonical
-      && record.peer_fingerprint === peerFp
-      && record.my_fingerprint === myFp
+      normalizeSafetyNumberInput(record.safety_number) === canonical
+      && record.peer_identity === identityStorageFingerprint(peerIdentity)
+      && record.my_identity === identityStorageFingerprint(myIdentity)
+      && record.key_type === myIdentity.type
     );
   } catch {
     return false;
@@ -77,7 +121,6 @@ export function clearPeerVerification(peerUserId) {
   window.dispatchEvent(new Event('ssc-verified-change'));
 }
 
-/** Remove pre-2.6 boolean flags (`ssc_verified_*` = `1`). */
 export function purgeLegacyVerificationFlags() {
   if (typeof localStorage === 'undefined') return;
   const keys = [];
@@ -90,10 +133,6 @@ export function purgeLegacyVerificationFlags() {
   for (const key of keys) localStorage.removeItem(key);
 }
 
-/**
- * Remove all peer verification records — panic only (logout keeps trust flags).
- * Clears v2 crypto-bound records and any legacy boolean flags.
- */
 export function purgeVerificationStorageOnPanic() {
   if (typeof localStorage === 'undefined') return;
   const keys = [];

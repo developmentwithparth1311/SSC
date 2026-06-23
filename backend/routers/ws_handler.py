@@ -12,6 +12,7 @@ from core.logging_config import logger
 from core.push_helpers import send_push_for_call
 from core.realtime import broadcast_to_conversation, manager
 from core.utils import iso, now_utc
+from core.webrtc_signaling_policy import SignalingValidationError, validate_signaling_relay
 
 
 def register_websocket(app):
@@ -66,7 +67,18 @@ def register_websocket(app):
                         else:
                             can_call = await are_contacts(user_id, to_user)
                         if can_call:
-                            payload = {**data, "from": user_id, "from_username": user.get("username")}
+                            try:
+                                relay_body = validate_signaling_relay(data)
+                            except SignalingValidationError as exc:
+                                logger.warning(
+                                    f"WS signaling rejected user={user_id} type={t}: {exc}"
+                                )
+                                continue
+                            payload = {
+                                **relay_body,
+                                "from": user_id,
+                                "from_username": user.get("username"),
+                            }
                             await manager.send_to_user(to_user, payload)
                             if t == "call-offer":
                                 mode = data.get("mode", "audio")

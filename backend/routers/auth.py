@@ -5,7 +5,7 @@ import uuid
 from typing import Optional
 
 import pyotp
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from core.auth import (
@@ -13,11 +13,11 @@ from core.auth import (
     get_current_user,
     hash_password,
     jwt_ttl_seconds,
-    make_jwt,
-    store_user_session,
     verify_password,
     verify_turnstile,
 )
+from core.session_cookie import clear_session_cookie, resolve_request_session_token, set_session_cookie
+from core.session_issue import create_session_token, issue_authenticated_session
 from core.token_revocation import revoke_token
 from core.ws_tickets import issue_ws_ticket
 from core.database import db
@@ -37,7 +37,7 @@ router = APIRouter()
 
 
 @router.post("/register")
-async def register(body: RegisterIn, request: Request):
+async def register(body: RegisterIn, request: Request, response: Response):
     ip = client_ip(request)
     if not rate_limit_check(f"register:{ip}", max_hits=5, window_sec=3600):
         raise HTTPException(429, "Too many registrations from this IP — try again later")
@@ -67,14 +67,13 @@ async def register(body: RegisterIn, request: Request):
         "created_at": iso(now_utc()),
     }
     await db.users.insert_one(doc)
-    token = make_jwt(user_id)
-    await store_user_session(user_id, token)
+    token = await issue_authenticated_session(response, request, user_id)
     user = {k: v for k, v in doc.items() if k not in ("password_hash", "_id", "totp_secret")}
     return {"token": token, "user": user}
 
 
 @router.post("/login")
-async def login(body: LoginIn, request: Request):
+async def login(body: LoginIn, request: Request, response: Response):
     ip = client_ip(request)
     if not rate_limit_check(f"login:{ip}", max_hits=10, window_sec=300):
         raise HTTPException(429, "Too many login attempts — try again in 5 minutes")
@@ -109,8 +108,7 @@ async def login(body: LoginIn, request: Request):
                     break
         if not code_ok:
             raise HTTPException(401, "Invalid 2FA code")
-    token = make_jwt(doc["user_id"])
-    await store_user_session(doc["user_id"], token)
+    token = await issue_authenticated_session(response, request, doc["user_id"])
     user = {k: v for k, v in doc.items() if k not in ("password_hash", "_id", "totp_secret")}
     return {"token": token, "user": user}
 
@@ -132,12 +130,13 @@ async def logout(
     response: Response,
     current=Depends(get_current_user),
     authorization: Optional[str] = Header(None),
+    session_token: Optional[str] = Cookie(None),
 ):
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization[7:]
+    token = resolve_request_session_token(authorization, session_token)
+    if token:
         revoke_token(token, jwt_ttl_seconds(token))
         await db.user_sessions.delete_one({"session_token": token})
-    response.delete_cookie("session_token", path="/")
+    clear_session_cookie(response)
     return {"ok": True}
 
 
@@ -210,7 +209,12 @@ async def google_start(platform: str = "web"):
 
 
 @router.get("/google/callback")
-async def google_callback(code: str = "", state: str = "", error: str = ""):
+async def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+):
     from core.google_auth import (
         exchange_code,
         frontend_redirect,
@@ -230,14 +234,15 @@ async def google_callback(code: str = "", state: str = "", error: str = ""):
     except Exception as e:
         raise HTTPException(401, f"Google sign-in failed: {e}")
     user, needs_setup = await _google_find_or_create(claims)
-    token = make_jwt(user["user_id"])
-    await store_user_session(user["user_id"], token)
     platform = parse_state(state)
-    return RedirectResponse(frontend_redirect(platform, token, needs_setup))
+    token = await create_session_token(user["user_id"])
+    redirect = RedirectResponse(frontend_redirect(platform, token, needs_setup))
+    set_session_cookie(redirect, token, request)
+    return redirect
 
 
 @router.post("/google/session")
-async def google_session(body: GoogleSessionIn, request: Request):
+async def google_session(body: GoogleSessionIn, request: Request, response: Response):
     from core.google_auth import public_client_id, verify_id_token
 
     if not public_client_id():
@@ -255,8 +260,7 @@ async def google_session(body: GoogleSessionIn, request: Request):
         raise HTTPException(401, f"Invalid Google token: {e}")
 
     user, needs_setup = await _google_find_or_create(claims)
-    token = make_jwt(user["user_id"])
-    await store_user_session(user["user_id"], token)
+    token = await issue_authenticated_session(response, request, user["user_id"])
     return {"token": token, "user": user, "needs_username": needs_setup}
 
 

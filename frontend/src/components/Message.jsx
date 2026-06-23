@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Translate, Image as ImageIcon, Paperclip, ShieldCheck, Check, Checks } from '@phosphor-icons/react';
-import { decryptMessage, decryptBytes } from '../lib/crypto';
+import { Translate, Image as ImageIcon, Paperclip, Check, Checks } from '@phosphor-icons/react';
+import { decryptBytes } from '../lib/crypto';
+import { decryptMessageBody, getMessageProtocol } from '../lib/signal/migration';
+import { isSignalV1Message } from '../lib/signal/messages';
+import EncryptionModeBadge from './EncryptionModeBadge';
 import { api } from '../lib/api';
 import { fetchFileBytes } from '../lib/files';
 import { registerBlobUrl, subscribeMemoryWipe, unregisterBlobUrl } from '../lib/memoryWipe';
 import CountdownBadge from './CountdownBadge';
 
 export default function Message({
-  msg, isMine, myUserId, privateKey, autoTranslate, translationEnabled = false,
+  msg, isMine, myUserId, privateKey, peerUserId = null, autoTranslate, translationEnabled = false,
   targetLang, sourceLang, reads = [], participantsCount = 2,
 }) {
   const [plaintext, setPlaintext] = useState(null);
@@ -27,18 +30,26 @@ export default function Message({
   useEffect(() => {
     let mounted = true;
     (async () => {
-      if (!privateKey) { setPlaintext(null); return; }
       try {
-        const myKey = msg.encrypted_keys?.[myUserId];
-        if (!myKey) { setError('NO_KEY'); return; }
-        const pt = await decryptMessage(privateKey, msg.ciphertext, msg.iv, myKey);
-        if (mounted) setPlaintext(pt);
+        const pt = await decryptMessageBody(msg, { myUserId, peerUserId, privateKey });
+        if (mounted) {
+          setPlaintext(pt);
+          setError(null);
+        }
       } catch (e) {
-        if (mounted) setError('DECRYPT_FAIL');
+        if (!mounted) return;
+        const code = e?.message;
+        if (code === 'VAULT_LOCKED') {
+          setPlaintext(null);
+          setError(null);
+          return;
+        }
+        if (code === 'NO_KEY') setError('NO_KEY');
+        else setError('DECRYPT_FAIL');
       }
     })();
     return () => { mounted = false; };
-  }, [msg, myUserId, privateKey]);
+  }, [msg, myUserId, privateKey, peerUserId]);
 
   const sameLanguage = Boolean(
     sourceLang && targetLang && sourceLang.toLowerCase() === targetLang.toLowerCase(),
@@ -99,7 +110,9 @@ export default function Message({
         {error === 'NO_KEY' && <span className="font-mono text-xs text-[#FF3B30]">[no key for this device]</span>}
         {!error && plaintext === null && (
           <span className="font-mono text-xs text-[#A1A1AA]">
-            {!privateKey ? 'unlock vault to read & translate' : 'decrypting…'}
+            {isSignalV1Message(msg)
+              ? 'decrypting…'
+              : (!privateKey ? 'unlock vault to read & translate' : 'decrypting…')}
           </span>
         )}
         {!error && plaintext !== null && (
@@ -137,7 +150,7 @@ export default function Message({
         )}
       </div>
       <div className={`mt-1 flex items-center gap-2 text-[10px] font-mono text-[#A1A1AA] tracking-wider ${isMine ? 'justify-end' : 'justify-start'}`}>
-        <ShieldCheck size={10} className="text-[#34C759]" />
+        <EncryptionModeBadge protocol={getMessageProtocol(msg)} compact />
         <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         <span className="opacity-50">·</span>
         <CountdownBadge expiresAt={msg.expires_at} />

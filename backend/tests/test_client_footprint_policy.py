@@ -79,11 +79,12 @@ def test_c3_c7_resolved():
     assert "C7" not in open_ids
 
 
-def test_only_c8_gap_remains_open_for_engine3():
+def test_c8_resolved_no_open_footprint_gaps():
     open_ids = {g.gap_id for g in open_gaps()}
     engine3_open = {g.gap_id for g in open_gaps() if g.engine3_step}
     assert engine3_open == set()
-    assert "C8" in open_ids
+    assert "C8" not in open_ids
+    assert open_ids == set()
 
 
 def test_engine3_fully_complete():

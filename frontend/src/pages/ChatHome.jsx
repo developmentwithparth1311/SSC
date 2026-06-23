@@ -24,6 +24,18 @@ import ContactsModal from '../components/ContactsModal';
 import { formatPeerPresence, isPeerOnline } from '../lib/presence';
 import { consumePendingInvite } from '../lib/invites';
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
+import { getSessionToken } from '../lib/sessionStore';
+import { ensureSignalSession } from '../lib/signal/x3dh';
+import { encryptSignalText } from '../lib/signal/messages';
+import { ProtocolVersion } from '../lib/signal/constants';
+import {
+  decryptMessageBody,
+  encryptionHintI18nKey,
+  resolveOutgoingEncryptionHint,
+  shouldSendWithSignal,
+} from '../lib/signal/migration';
+import EncryptionModeBadge from '../components/EncryptionModeBadge';
+import { unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 
 const PENDING_CALL_KEY = 'ssc_pending_call';
 
@@ -37,6 +49,7 @@ export default function ChatHome() {
   const [messageFilter, setMessageFilter] = useState('');
   const [decryptedBodies, setDecryptedBodies] = useState({});
   const [draft, setDraft] = useState('');
+  const [encryptionHint, setEncryptionHint] = useState(null);
   const [autoTranslate, setAutoTranslate] = useState(false);
   const [translationEnabled, setTranslationEnabled] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
@@ -130,15 +143,17 @@ export default function ChatHome() {
 
   // Decrypt message bodies client-side for in-chat search (E2E — server never sees plaintext)
   useEffect(() => {
-    if (!privateKey || !user?.user_id || messages.length === 0) return;
+    if (!user?.user_id || messages.length === 0) return;
     let cancelled = false;
     (async () => {
       const next = {};
       for (const m of messages) {
-        const myKey = m.encrypted_keys?.[user.user_id];
-        if (!myKey || !m.ciphertext || !m.iv) continue;
         try {
-          next[m.message_id] = await decryptMessage(privateKey, m.ciphertext, m.iv, myKey);
+          next[m.message_id] = await decryptMessageBody(m, {
+            myUserId: user.user_id,
+            peerUserId: peer?.user_id,
+            privateKey,
+          });
         } catch {
           /* skip undecryptable */
         }
@@ -146,7 +161,7 @@ export default function ChatHome() {
       if (!cancelled) setDecryptedBodies(next);
     })();
     return () => { cancelled = true; };
-  }, [messages, privateKey, user?.user_id]);
+  }, [messages, privateKey, user?.user_id, peer?.user_id]);
 
   const filteredMessages = useMemo(() => {
     const q = messageFilter.trim().toLowerCase();
@@ -365,9 +380,8 @@ export default function ChatHome() {
 
   // ─── Socket ───
   useEffect(() => {
-    const token = localStorage.getItem('ssc_token');
-    if (!token) return;
-    const s = new ChatSocket(token, {
+    if (!user) return;
+    const s = new ChatSocket(getSessionToken(), {
       onMessage: (data) => {
         if (data.type === 'message') {
           if (data.data.conversation_id === activeId) {
@@ -382,14 +396,25 @@ export default function ChatHome() {
         } else if (data.type === 'call-offer') {
           // incoming call
           (async () => {
-            const { data: peerData } = await api.get(`/users/${data.from}/public`);
-            if (data.group) {
+            let offer = data;
+            if (!data.group && user?.user_id) {
+              try {
+                offer = await unpackIncomingSignaling(data, {
+                  myUserId: user.user_id,
+                  peerUserId: data.from,
+                });
+              } catch {
+                return;
+              }
+            }
+            const { data: peerData } = await api.get(`/users/${offer.from}/public`);
+            if (offer.group) {
               // Group call: offer carries members list
-              const members = (data.members || []).filter((m) => m.user_id !== user?.user_id);
-              if (members.length === 0) members.push({ user_id: data.from, username: peerData.username });
-              setGroupCallState({ mode: data.mode, direction: 'incoming', members, signal: { from: data.from, from_username: peerData.username, sdp: data.sdp, members } });
+              const members = (offer.members || []).filter((m) => m.user_id !== user?.user_id);
+              if (members.length === 0) members.push({ user_id: offer.from, username: peerData.username });
+              setGroupCallState({ mode: offer.mode, direction: 'incoming', members, signal: { from: offer.from, from_username: peerData.username, sdp: offer.sdp, members } });
             } else {
-              setCallState({ mode: data.mode, direction: 'incoming', peer: peerData, signal: { sdp: data.sdp } });
+              setCallState({ mode: offer.mode, direction: 'incoming', peer: peerData, signal: { sdp: offer.sdp } });
             }
           })();
         } else if (data.type === 'read') {
@@ -405,8 +430,21 @@ export default function ChatHome() {
         } else if (data.type === 'status-new') {
           window.dispatchEvent(new Event('ssc-status-new'));
         } else if (['call-answer', 'ice-candidate', 'call-end', 'call-reject'].includes(data.type)) {
-          window.dispatchEvent(new CustomEvent('ssc-signal', { detail: data }));
-          if (data.type === 'call-end' || data.type === 'call-reject') setCallState(null);
+          (async () => {
+            let signal = data;
+            if (!data.group && user?.user_id && data.type !== 'call-end' && data.type !== 'call-reject') {
+              try {
+                signal = await unpackIncomingSignaling(data, {
+                  myUserId: user.user_id,
+                  peerUserId: data.from,
+                });
+              } catch {
+                return;
+              }
+            }
+            window.dispatchEvent(new CustomEvent('ssc-signal', { detail: signal }));
+            if (signal.type === 'call-end' || signal.type === 'call-reject') setCallState(null);
+          })();
         }
       },
     });
@@ -414,7 +452,7 @@ export default function ChatHome() {
     socketRef.current = s;
     return () => s.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId]);
+  }, [activeId, user?.user_id]);
 
   // ─── Load messages on active change ───
   useEffect(() => {
@@ -430,6 +468,26 @@ export default function ChatHome() {
       } catch {}
     })();
   }, [activeId]);
+
+  // Engine 8.4 — establish X3DH session when opening a 1:1 chat (Android native)
+  useEffect(() => {
+    if (!activeId || isGroup || !peer?.user_id) return;
+    ensureSignalSession(peer.user_id, user?.user_id).catch(() => {});
+  }, [activeId, isGroup, peer?.user_id, user?.user_id]);
+
+  // Engine 8.6 — outgoing encryption mode hint (Signal vs legacy fallback)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!activeId) {
+        if (!cancelled) setEncryptionHint(null);
+        return;
+      }
+      const hint = await resolveOutgoingEncryptionHint({ isGroup, peer, user });
+      if (!cancelled) setEncryptionHint(hint);
+    })();
+    return () => { cancelled = true; };
+  }, [activeId, isGroup, peer, user]);
 
   // Mark new incoming messages as read when the chat is open
   useEffect(() => {
@@ -483,10 +541,31 @@ export default function ChatHome() {
 
   // ─── Send message ───
   const sendMessage = async (text, type = 'text', attachmentId = null, attachmentEnc = null) => {
-    if (!privateKey) { setUnlockOpen(true); return; }
     if (!activeConv) return;
     if (!text && !attachmentId) return;
     try {
+      const useSignal = await shouldSendWithSignal({
+        isGroup,
+        attachmentId,
+        messageType: type,
+        peer,
+        user,
+      });
+
+      if (useSignal) {
+        const enc = await encryptSignalText(peer.user_id, user.user_id, text || '');
+        await api.post('/messages', {
+          conversation_id: activeId,
+          protocol: ProtocolVersion.SIGNAL_V1,
+          ciphertext: enc.ciphertext,
+          signal_message_type: enc.signal_message_type,
+          message_type: type,
+        });
+        setDraft('');
+        return;
+      }
+
+      if (!privateKey) { setUnlockOpen(true); return; }
       const recipients = recipientsForActive;
       if (Object.keys(recipients).length < 2) {
         toast.error('No recipients have encryption keys yet');
@@ -495,6 +574,7 @@ export default function ChatHome() {
       const enc = await encryptMessageForRecipients(text || '', recipients);
       await api.post('/messages', {
         conversation_id: activeId,
+        protocol: ProtocolVersion.LEGACY_RSA,
         ciphertext: enc.ciphertext, iv: enc.iv, encrypted_keys: enc.encrypted_keys,
         message_type: type, attachment_id: attachmentId,
         attachment_iv: attachmentEnc?.iv,
@@ -655,9 +735,7 @@ export default function ChatHome() {
       return;
     }
     try {
-      const myPub = typeof user.public_key === 'string' ? JSON.parse(user.public_key) : user.public_key;
-      const peerPub = typeof peer.public_key === 'string' ? JSON.parse(peer.public_key) : peer.public_key;
-      setPeerVerified(await isPeerVerified(peer.user_id, myPub, peerPub));
+      setPeerVerified(await isPeerVerified(peer.user_id, user, peer, user.user_id, peer));
     } catch {
       setPeerVerified(false);
     }
@@ -931,6 +1009,7 @@ export default function ChatHome() {
                   msg={m}
                   isMine={m.sender_id === user?.user_id}
                   myUserId={user?.user_id}
+                  peerUserId={peer?.user_id}
                   privateKey={privateKey}
                   autoTranslate={translationEnabled && autoTranslate && !sameLangAsPeer}
                   translationEnabled={translationEnabled}
@@ -946,6 +1025,16 @@ export default function ChatHome() {
                 </div>
               )}
             </div>
+
+            {encryptionHint && (
+              <div
+                className="px-3 py-1.5 border-t border-[#27272A] bg-[#121212]/90 flex items-center gap-2 text-[10px] font-mono tracking-wider"
+                data-testid="encryption-hint-banner"
+              >
+                <EncryptionModeBadge protocol={encryptionHint.mode} />
+                <span className="text-[#A1A1AA]">{t(encryptionHintI18nKey(encryptionHint))}</span>
+              </div>
+            )}
 
             <form onSubmit={onSendText} className="chat-composer safe-bottom safe-x border-t border-[#27272A] px-2 md:px-3 py-2 flex items-center gap-2">
               <input ref={fileInputRef} type="file" hidden onChange={onFileChange} data-testid="file-input" />
@@ -1085,7 +1174,7 @@ export default function ChatHome() {
       {/* Active call */}
       {callState && callState.direction !== 'incoming' && (
         <CallModal mode={callState.mode} direction={callState.direction === 'incoming-accepted' ? 'incoming' : 'outgoing'}
-          peer={callState.peer} socket={socketRef.current} signal={callState.signal}
+          peer={callState.peer} user={user} socket={socketRef.current} signal={callState.signal}
           onClose={() => setCallState(null)} />
       )}
 

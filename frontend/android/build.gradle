@@ -21,6 +21,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://build-artifacts.signal.org/libraries/maven/' }
     }
 }
 

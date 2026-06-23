@@ -41,6 +41,8 @@ def test_panic_service_revokes_session_token():
     router = (root / "backend" / "routers" / "panic.py").read_text(encoding="utf-8")
     assert "execute_server_panic_wipe" in router
     assert "session_token=token" in router
+    assert "clear_session_cookie" in router
+    assert "resolve_request_session_token" in router
 
 
 def test_charter_documents_panic_preservation():

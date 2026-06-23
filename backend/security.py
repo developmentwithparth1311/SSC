@@ -112,10 +112,12 @@ def validate_environment():
     from core.egress_policy import validate_air_gap_at_startup
     validate_air_gap_at_startup(logger)
 
+    from core.session_production import validate_production_redis
+
+    validate_production_redis(_redis, _redis_url)
+
     env = os.environ.get("ENV", "development").lower()
     if env == "production":
-        if not os.environ.get("REDIS_URL"):
-            logger.warning("ENV=production but REDIS_URL unset — rate limits are per-worker only (use Redis for multi-worker)")
         cors = os.environ.get("CORS_ORIGINS", "")
         if "*" in cors:
             logger.warning("CORS_ORIGINS contains '*' in production — restrict to your frontend origin(s)")

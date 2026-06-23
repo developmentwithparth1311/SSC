@@ -42,7 +42,7 @@ ENFORCEMENT_PATHS: Tuple[str, ...] = (
     "frontend/src/context/AuthContext.jsx",
 )
 
-DEFERRED_ENGINE2_GAPS = frozenset({"G6", "G9"})
+DEFERRED_ENGINE2_GAPS = frozenset()
 
 
 @dataclass
@@ -93,7 +93,7 @@ def _check_engine2_gaps() -> ProofCheck:
     return ProofCheck(
         name="engine2_gaps_resolved",
         passed=ok,
-        detail="G1–G5, G7–G8 resolved; G6/G9 deferred to Engine 8" if ok else f"open gaps: {sorted(unexpected)}",
+        detail="G1–G9 resolved (G6/G9 closed in Engine 8)" if ok else f"open gaps: {sorted(unexpected)}",
     )
 
 

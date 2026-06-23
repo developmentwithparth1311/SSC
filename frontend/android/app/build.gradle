@@ -3,6 +3,11 @@ apply plugin: 'com.android.application'
 android {
     namespace "chat.ssc.secure"
     compileSdk rootProject.ext.compileSdkVersion
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "chat.ssc.secure"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -20,6 +25,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    packaging {
+        resources {
+            excludes += ['**/libsignal_jni*.dylib', '**/signal_jni*.dll', '**/libsignal_jni_testing.so']
         }
     }
 }
@@ -40,6 +50,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    implementation 'org.signal:libsignal-android:0.96.2'
+    implementation 'org.signal:libsignal-client:0.96.2'
 }
 
 apply from: 'capacitor.build.gradle'

@@ -64,7 +64,7 @@ FOOTPRINT_LOCATIONS: Dict[str, FootprintLocation] = {
         panic_action="remove",
         logout_action="remove",
         engine3_step=None,
-        notes="Cleared today; Engine 5 may move off localStorage.",
+        notes="Not written after Engine 5.4; legacy key purged on startup/panic/logout.",
     ),
     "local_storage_push": FootprintLocation(
         location_id="local_storage_push",
@@ -206,7 +206,7 @@ FOOTPRINT_GAPS: List[FootprintGap] = [
         "C7", "Client wipe runs after async server panic; memory visible during request", GapSeverity.MEDIUM, "3.6", resolved=True,
     ),
     FootprintGap(
-        "C8", "JWT in localStorage (session hijack if device grabbed while logged in)", GapSeverity.HIGH, None, "5",
+        "C8", "JWT in localStorage (session hijack if device grabbed while logged in)", GapSeverity.HIGH, None, "5", resolved=True,
     ),
 ]
 
@@ -224,6 +224,7 @@ PANIC_SERVER_ENDPOINT = "/api/panic-wipe"
 ORCHESTRATOR_MODULE = "frontend/src/lib/clientFootprintOrchestrator.js"
 CLIENT_WIPE_PHASE_1: Tuple[str, ...] = (
     "dispatchMemoryWipe",
+    "clearSessionToken",
     "clearLocalStorageSessionSecrets",
     "purgeLegacyPrivateKeyFromSession",
     "clearSessionStorageFootprint",

@@ -1,5 +1,5 @@
 """Authentication: JWT, passwords, Turnstile, current-user dependency."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 import bcrypt
@@ -10,6 +10,7 @@ from fastapi import Cookie, Header, HTTPException, Request
 from core.config import JWT_SECRET, TURNSTILE_SECRET
 from core.database import db
 from core.logging_config import logger
+from core.session_ttl import jwt_exp_timestamp, session_expires_at, session_ttl_seconds
 from core.token_revocation import is_token_revoked, revoke_token
 from core.utils import iso
 
@@ -26,10 +27,11 @@ def verify_password(pw: str, hashed: str) -> bool:
 
 
 def make_jwt(user_id: str) -> str:
+    now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
-        "iat": int(datetime.now(timezone.utc).timestamp()),
-        "exp": int((datetime.now(timezone.utc) + timedelta(days=7)).timestamp()),
+        "iat": int(now.timestamp()),
+        "exp": jwt_exp_timestamp(now),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
@@ -51,11 +53,11 @@ def jwt_ttl_seconds(token: str) -> int:
         ttl = exp - int(datetime.now(timezone.utc).timestamp())
         return max(ttl, 60)
     except Exception:
-        return 7 * 24 * 3600
+        return session_ttl_seconds()
 
 
 async def store_user_session(user_id: str, token: str) -> None:
-    expires = datetime.now(timezone.utc) + timedelta(days=7)
+    expires = session_expires_at()
     await db.user_sessions.update_one(
         {"session_token": token},
         {"$set": {

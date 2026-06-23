@@ -1,5 +1,9 @@
 # SSC — Super Secure Chat · PRD
 
+> **Roadmap (single source of truth):** `memory/SSC-ROADMAP.md`  
+> **Security model:** `memory/SECURITY_MODEL.md`  
+> **Note (Jun 2026):** Engine 8 added Signal Protocol on Android (1:1 text + 1:1 call signaling). Web/groups/attachments still use legacy RSA — see security model. Sections below include original MVP history; defer list at bottom is partly outdated.
+
 ## Original problem statement
 Build a WhatsApp/Telegram-like app with:
 - 24h auto-recycle of chats, calls, files
@@ -16,7 +20,7 @@ Build a WhatsApp/Telegram-like app with:
 ## Architecture
 - **Backend**: FastAPI + MongoDB (TTL indexes for 24h auto-delete)
 - **Realtime**: WebSocket (`/api/ws`) for messages, typing, read receipts, WebRTC signaling
-- **E2E encryption**: RSA-OAEP 2048 + AES-256-GCM client-side, per-message ephemeral AES key (message-level forward secrecy). Private keys wrapped with PBKDF2(password). Server only sees ciphertext.
+- **E2E encryption**: Legacy RSA-OAEP 2048 + AES-256-GCM (web, groups, attachments, migration). **Android 1:1 text:** Signal Protocol `signal_v1` (libsignal 0.96.2, X3DH + Double Ratchet). Private keys wrapped with PBKDF2(password). Server only sees ciphertext.
 - **Auth**: JWT (email/password) + (Google OAuth disabled in standalone; easy to add your own) + TOTP 2FA + Cloudflare Turnstile captcha + per-IP rate limiting
 - **Translation**: Pluggable (currently stub / no-op until you configure a provider)
 - **File storage**: MongoDB GridFS with TTL metadata (24h) — fully self-contained, no external storage service
@@ -60,7 +64,7 @@ Build a WhatsApp/Telegram-like app with:
 - ✅ 79/79 backend tests pass (58 regression + 21 new)
 
 ## Deferred / next iterations
-- **Full Signal Protocol (X3DH + Double Ratchet)** — provides asymmetric-level forward secrecy with per-message ratcheting. Current implementation has per-message symmetric ephemeral AES keys (already a form of message-level forward secrecy) and per-peer manual verification. Full Signal Protocol is a multi-week project on its own.
+- **Signal Protocol expansion** — Engine 8 complete for Android 1:1 text + 1:1 call signaling. Remaining: attachments, web WASM, group Sender Keys (see `SSC-ROADMAP.md`).
 - **React Native / native app store wrappers** — PWA already works on iOS/Android/desktop and is installable. For Apple App Store / Google Play presence we'd wrap with **Capacitor.js**, requiring Apple Developer account ($99/yr) + Mac for iOS builds. Separate project.
 - **Real Cloudflare Turnstile keys** — get from dash.cloudflare.com → Turnstile → "Add Site". Replace `TURNSTILE_SITEKEY` + `TURNSTILE_SECRET` in `/app/backend/.env`.
 - **Redis-backed rate limit** for multi-worker prod

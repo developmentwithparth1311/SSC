@@ -36,7 +36,8 @@ def test_execute_client_wipe_runs_phase1_steps_in_order():
     body = text[start:]
     for step in CLIENT_WIPE_PHASE_1:
         assert step in body
-    assert body.index("dispatchMemoryWipe") < body.index("clearLocalStorageSessionSecrets")
+    assert body.index("dispatchMemoryWipe") < body.index("clearSessionToken()")
+    assert body.index("clearSessionToken()") < body.index("clearLocalStorageSessionSecrets")
     assert body.index("clearLocalStorageSessionSecrets") < body.index("clearSessionStorageFootprint")
 
 

@@ -54,8 +54,10 @@ class CreateConversationIn(BaseModel):
 class SendMessageIn(BaseModel):
     conversation_id: str
     ciphertext: str
-    iv: str
-    encrypted_keys: Dict[str, str]
+    protocol: str = "legacy_rsa"
+    iv: Optional[str] = None
+    encrypted_keys: Optional[Dict[str, str]] = None
+    signal_message_type: Optional[int] = None
     message_type: str = "text"
     attachment_id: Optional[str] = None
     attachment_iv: Optional[str] = None
@@ -116,3 +118,22 @@ class CreateStatusIn(BaseModel):
 
 class MarkStatusViewedIn(BaseModel):
     status_id: str
+
+
+class OneTimePreKeyIn(BaseModel):
+    prekey_id: int = Field(ge=0, le=16777215)
+    public: str = Field(min_length=16, max_length=512)
+
+
+class PrekeyBundleIn(BaseModel):
+    registration_id: int = Field(ge=1, le=16380)
+    device_id: int = Field(default=1, ge=1, le=1)
+    identity_key_public: str = Field(min_length=16, max_length=512)
+    signed_prekey_id: int = Field(ge=0, le=16777215)
+    signed_prekey_public: str = Field(min_length=16, max_length=512)
+    signed_prekey_signature: str = Field(min_length=64, max_length=128)
+    kyber_prekey_id: int = Field(ge=0, le=16777215)
+    kyber_prekey_public: str = Field(min_length=16, max_length=4096)
+    kyber_prekey_signature: str = Field(min_length=64, max_length=128)
+    one_time_prekeys: List[OneTimePreKeyIn] = Field(min_length=1, max_length=100)
+    libsignal_version: Optional[str] = Field(default=None, max_length=32)

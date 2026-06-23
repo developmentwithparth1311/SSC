@@ -1,8 +1,9 @@
-"""Engine 2 Step 2.6 — verification handshake hardening."""
+"""Engine 2.6 + Engine 8.2 — verification handshake policy."""
 from pathlib import Path
 
 from core.verification_policy import (
     CLIENT_VERIFICATION_CONTROLS,
+    FINGERPRINT_ITERATIONS,
     LEGACY_VERIFICATION_PREFIX,
     REQUIRED_RECORD_FIELDS,
     SAFETY_NUMBER_LENGTH,
@@ -12,10 +13,11 @@ from core.verification_policy import (
 
 
 def test_verification_record_version_and_fields():
-    assert VERIFICATION_RECORD_VERSION == 1
+    assert VERIFICATION_RECORD_VERSION == 3
     assert SAFETY_NUMBER_LENGTH == 60
+    assert FINGERPRINT_ITERATIONS == 5200
     assert REQUIRED_RECORD_FIELDS == frozenset({
-        "v", "safety_number", "peer_fingerprint", "my_fingerprint", "verified_at",
+        "v", "key_type", "safety_number", "peer_identity", "my_identity", "verified_at",
     })
 
 
@@ -29,18 +31,28 @@ def test_verification_lib_exports_crypto_binding():
     text = (root / "frontend" / "src" / "lib" / "verification.js").read_text(encoding="utf-8")
     assert "markPeerVerified" in text
     assert "isPeerVerified" in text
-    assert "safety_number" in text
-    assert "peer_fingerprint" in text
+    assert "computeSafetyNumberForUsers" in text
+    assert "peer_identity" in text
+    assert "VERIFICATION_RECORD_VERSION = 3" in text
     assert "purgeLegacyVerificationFlags" in text
     assert "localStorage.setItem(`ssc_verified_${peer.user_id}`, '1')" not in text
 
 
-def test_verify_modal_uses_verification_lib():
+def test_safety_number_module_signal_iterations():
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "frontend" / "src" / "lib" / "safetyNumber.js").read_text(encoding="utf-8")
+    assert "FINGERPRINT_ITERATIONS = 5200" in text
+    assert "buildVerifyQrPayload" in text
+    assert "api.qrserver.com" not in text
+
+
+def test_verify_modal_local_qr():
     root = Path(__file__).resolve().parents[2]
     modal = (root / "frontend" / "src" / "components" / "VerifyHandshakeModal.jsx").read_text(encoding="utf-8")
-    assert "from '../lib/verification'" in modal
-    assert "markPeerVerified" in modal
-    assert "isPeerVerified" in modal
+    assert "from 'qrcode'" in modal
+    assert "QRCode.toDataURL" in modal
+    assert "verify-paste-input" in modal
+    assert "api.qrserver.com" not in modal
     assert "localStorage.setItem" not in modal
 
 

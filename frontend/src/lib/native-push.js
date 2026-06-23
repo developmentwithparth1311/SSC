@@ -88,7 +88,8 @@ export async function initNativePush() {
 /** Request permission and register device token (call after login). */
 export async function subscribeNativePush() {
   if (!isNativeApp()) return null;
-  if (!localStorage.getItem('ssc_token')) return null;
+  const { getSessionToken } = await import('./sessionStore');
+  if (!getSessionToken()) return null;
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
     attachListeners(PushNotifications);

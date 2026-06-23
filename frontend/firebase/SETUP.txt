@@ -1,53 +1,116 @@
-SSC Native Push (FCM + APNs) — Firebase setup
-=============================================
+SSC + Firebase (Spark plan) — connection guide
+==============================================
+Project: super-chat-b0992  |  Android package: chat.ssc.secure
 
-1. Create a project at https://console.firebase.google.com/
+IMPORTANT — what Firebase IS and IS NOT
+-----------------------------------------
+Firebase Spark (free) gives you:
+  - FCM push (Android)          — ALREADY wired in SSC
+  - App Distribution (testers)  — upload APK, invite by email
+  - Hosting (optional PWA web)  — static site from frontend/build
+  - Google Cloud project shell  — same account for Cloud Run API
 
-2. ANDROID
-   - Add Android app, package name: chat.ssc.secure
-   - Download google-services.json
-   - Place at: frontend/android/app/google-services.json
-   - Rebuild: yarn cap:sync
+Firebase does NOT run the Python/FastAPI backend.
+The API must be HTTPS somewhere else (Cloud Run, Render, Railway).
+MongoDB stays on Atlas (already in backend/.env).
 
-3. iOS (Mac + Xcode required)
-   - Add iOS app, bundle ID: chat.ssc.secure
-   - Download GoogleService-Info.plist → frontend/ios/App/App/
-   - Firebase Console → Project Settings → Cloud Messaging → upload APNs Auth Key (.p8)
-   - Xcode: enable Push Notifications + Background Modes → Remote notifications
-   - yarn cap:add:ios && yarn cap:sync
+ALREADY ON THIS LAPTOP (check_ready.py = READY)
+-----------------------------------------------
+  [x] frontend/android/app/google-services.json
+  [x] backend/firebase/service-account.json
+  [x] GOOGLE_APPLICATION_CREDENTIALS in backend/.env
+  [x] FCM native push code (native_push.py + native-push.js)
 
-4. BACKEND
-   - Firebase Console → Service accounts → Generate new private key
-   - Save JSON and set in backend/.env:
-     GOOGLE_APPLICATION_CREDENTIALS=C:\path\to\service-account.json
-   - Restart backend
+STILL NEEDED — one public HTTPS API URL
+---------------------------------------
+Until the API has HTTPS, App Tester builds cannot replace LAN.
 
-5. TEST
-   - Build mobile app with REACT_APP_BACKEND_URL pointing to your API
-   - Login → vault unlock → native token registers via /api/push/native/subscribe
-   - Send message from another user while app is backgrounded
+Recommended free path (same Google account as Firebase):
+  1. Deploy backend Docker image to Google Cloud Run
+  2. Use MongoDB Atlas (already configured)
+  3. Use Upstash Redis free tier → set REDIS_URL in Cloud Run env
+  4. Set ENV=production on the deployed API
 
-Web/PWA push (VAPID) is unchanged and independent.
+Alternative: Render.com or Railway free HTTPS URL.
 
-SECURITY (local only — never commit)
-------------------------------------
+STEP A — Firebase Console (browser)
+-----------------------------------
+https://console.firebase.google.com/project/super-chat-b0992
+
+1. App Distribution (testers)
+   - Release & Monitor → App Distribution
+   - Register app: chat.ssc.secure (if prompted)
+   - Tester emails (canonical list: scripts/firebase_testers.txt):
+       smashmaxxx@gmail.com
+       raullavita1988@gmail.com
+       velvetnightshub@gmail.com
+   - Add via console OR after firebase login:
+       .\scripts\add_firebase_testers.ps1
+   - Upload APK after build (see STEP D)
+
+2. Cloud Messaging (push) — should already be active
+   - Project Settings → Cloud Messaging
+   - Confirm Android app listed
+
+3. Hosting (optional — PWA in browser)
+   - Build → Hosting → Get started
+   - Uses firebase.json at repo root
+
+STEP B — Set production API URL in frontend
+-------------------------------------------
+Copy frontend/.env.production.local.example → .env.production.local
+
+  REACT_APP_BACKEND_URL=https://YOUR-DEPLOYED-API-URL
+
+No trailing slash. Must be https:// for App Tester / Play-bound builds.
+
+STEP C — Backend CORS (backend/.env on deployed server)
+-------------------------------------------------------
+Add your origins (comma-separated, no spaces issue):
+
+  CORS_ORIGINS=https://YOUR-API-URL,capacitor://localhost,https://super-chat-b0992.web.app
+
+capacitor://localhost is required for the Android WebView shell.
+
+STEP D — Build APK for Firebase App Distribution
+------------------------------------------------
+  cd frontend
+  yarn build:firebase
+  yarn cap sync
+  cd android
+  gradlew.bat assembleDebug
+
+APK path:
+  frontend/android/app/build/outputs/apk/debug/app-debug.apk
+
+Upload in Firebase Console → App Distribution → Releases.
+
+STEP E — Install Firebase CLI (optional, for hosting + CI uploads)
+------------------------------------------------------------------
+  npm install -g firebase-tools
+  firebase login
+  firebase use super-chat-b0992
+
+Host PWA:
+  cd frontend && yarn build:firebase
+  cd .. && firebase deploy --only hosting
+
+STEP F — After domain (~28 Jun)
+-------------------------------
+Add to CORS + OAuth redirect URIs:
+  https://yourdomain.com
+  https://api.yourdomain.com (if separate)
+
+Turnstile: Cloudflare widget bound to your domain.
+
+SECURITY — never commit
+-----------------------
   backend/.env
   backend/firebase/service-account.json
-  backend/atlas-credentials.env
   frontend/android/app/google-services.json
+  frontend/.env.production.local
 
-Delete copies on Desktop after files are in place above.
-
-READY TO BUILD
---------------
-1. Backend (new terminal):
-     cd backend
-     .\venv\Scripts\python.exe -m uvicorn server:app --port 8000
-
-2. Android app:
-     cd frontend
-     yarn cap:android
-   (Android Studio → Run on device/emulator)
-
-3. Real device: set REACT_APP_BACKEND_URL in .env.production.local
-   (use PC LAN IP or deployed HTTPS API, not localhost)
+LAN / HTTP builds (founder dev only)
+------------------------------------
+  yarn cap:sync:lan   — only if you still need local HTTP testing
+  capacitor.config.json cleartext — dev only; tighten for store release

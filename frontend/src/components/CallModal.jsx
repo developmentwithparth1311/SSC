@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
 import { getBackendUrl } from '../lib/platform';
+import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 
 /**
  * CallModal handles WebRTC voice/video calls.
@@ -30,7 +31,7 @@ async function getRTCConfig() {
   return { iceServers: DEFAULT_ICE, iceCandidatePoolSize: 10 };
 }
 
-export default function CallModal({ mode, direction, peer, socket, signal, onClose }) {
+export default function CallModal({ mode, direction, peer, user, socket, signal, onClose }) {
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -59,9 +60,11 @@ export default function CallModal({ mode, direction, peer, socket, signal, onClo
     const pc = new RTCPeerConnection(rtcConfig);
     pcRef.current = pc;
 
+    const signalingCtx = { peerUserId: peer.user_id, ourUserId: user?.user_id, peer, user, isGroup: false };
+
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        socket.send({ type: 'ice-candidate', to: peer.user_id, candidate: e.candidate });
+        sendSignaling(socket, { type: 'ice-candidate', to: peer.user_id, candidate: e.candidate }, signalingCtx);
       }
     };
     pc.ontrack = (e) => {
@@ -90,12 +93,12 @@ export default function CallModal({ mode, direction, peer, socket, signal, onClo
     if (direction === 'outgoing') {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.send({ type: 'call-offer', to: peer.user_id, mode, sdp: offer });
+      await sendSignaling(socket, { type: 'call-offer', to: peer.user_id, mode, sdp: offer }, signalingCtx);
     } else if (signal?.sdp) {
       await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket.send({ type: 'call-answer', to: peer.user_id, sdp: answer });
+      await sendSignaling(socket, { type: 'call-answer', to: peer.user_id, sdp: answer }, signalingCtx);
       setStatus('connected');
     }
   };
@@ -103,9 +106,17 @@ export default function CallModal({ mode, direction, peer, socket, signal, onClo
   // listen for signaling pushed by parent (via window event hack)
   useEffect(() => {
     const handler = async (e) => {
-      const data = e.detail;
+      let data = e.detail;
       const pc = pcRef.current;
       if (!pc) return;
+      try {
+        data = await unpackIncomingSignaling(data, {
+          myUserId: user?.user_id,
+          peerUserId: peer.user_id,
+        });
+      } catch {
+        return;
+      }
       if (data.type === 'call-answer' && data.from === peer.user_id) {
         await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
         setStatus('connected');
@@ -119,7 +130,7 @@ export default function CallModal({ mode, direction, peer, socket, signal, onClo
     };
     window.addEventListener('ssc-signal', handler);
     return () => window.removeEventListener('ssc-signal', handler);
-  }, [peer.user_id, onClose]);
+  }, [peer.user_id, user?.user_id, onClose]);
 
   const cleanup = () => {
     try { pcRef.current?.close(); } catch {}

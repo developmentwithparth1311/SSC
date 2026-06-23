@@ -12,7 +12,13 @@ import {
   runPanicOrchestrator,
 } from '../lib/clientFootprintOrchestrator';
 import { registerMemoryWipeHandler } from '../lib/memoryWipe';
+import {
+  clearSessionToken,
+  persistSessionToken,
+  purgeLegacyJwtFromStorage,
+} from '../lib/sessionStore';
 import { purgeLegacyVerificationFlags } from '../lib/verification';
+import { ensurePreKeysUploaded } from '../lib/signal/prekeys';
 
 const AuthCtx = createContext(null);
 
@@ -25,6 +31,7 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data);
+      ensurePreKeysUploaded().catch(() => {});
       return data;
     } catch {
       setUser(null);
@@ -35,6 +42,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     purgeLegacyPrivateKeyFromSession();
     purgeLegacyVerificationFlags();
+    purgeLegacyJwtFromStorage();
     if (typeof window !== 'undefined' && window.location.hash?.includes('session_id=')) {
       setLoading(false);
       return;
@@ -46,12 +54,14 @@ export function AuthProvider({ children }) {
     return registerMemoryWipeHandler(() => {
       setUser(null);
       setPrivateKey(null);
+      clearSessionToken();
     });
   }, []);
 
   const loginWithToken = async (token, userObj) => {
-    localStorage.setItem('ssc_token', token);
+    persistSessionToken(token);
     setUser(userObj);
+    ensurePreKeysUploaded().catch(() => {});
   };
 
   /** Hold decrypted key in React state only — never written to storage (Engine 2.2). */

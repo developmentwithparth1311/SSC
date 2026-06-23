@@ -39,7 +39,7 @@ ENFORCEMENT_PATHS: Tuple[str, ...] = (
     "frontend/src/lib/presence.js",
 )
 
-DEFERRED_ENGINE4_GAPS = frozenset({"M4", "M5", "M6"})
+DEFERRED_ENGINE4_GAPS = frozenset({"M4", "M5"})
 
 
 @dataclass
@@ -99,7 +99,7 @@ def _check_engine4_gaps() -> ProofCheck:
     return ProofCheck(
         name="engine4_gaps_resolved",
         passed=ok,
-        detail="M1–M3 resolved; M4–M6 deferred" if ok else f"open gaps: {sorted(unexpected)}",
+        detail="M1–M3, M6 resolved; M4–M5 deferred" if ok else f"open gaps: {sorted(unexpected)}",
     )
 
 

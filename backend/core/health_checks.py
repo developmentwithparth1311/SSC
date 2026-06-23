@@ -17,6 +17,11 @@ async def check_mongo() -> Dict[str, Any]:
 async def check_redis() -> Dict[str, Any]:
     backend = get_rate_limit_backend()
     if backend == "memory":
+        if ENV == "production":
+            return {
+                "status": "error",
+                "detail": "REDIS_URL required in production for revocation and rate limits",
+            }
         return {"status": "disabled", "detail": "REDIS_URL not set — per-worker in-memory limits"}
     result = ping_redis()
     if result:
@@ -27,13 +32,14 @@ async def check_redis() -> Dict[str, Any]:
 async def full_health() -> Dict[str, Any]:
     mongo = await check_mongo()
     redis = await check_redis()
-    parts = [mongo["status"], redis["status"]]
-    if "error" in parts:
+    if mongo["status"] == "error":
         overall = "error"
-    elif "disabled" in parts or ENV != "production":
-        overall = "ok"
+    elif ENV == "production" and redis["status"] != "ok":
+        overall = "error"
+    elif redis["status"] == "error":
+        overall = "degraded"
     else:
-        overall = "ok" if all(p == "ok" for p in parts) else "degraded"
+        overall = "ok"
     return {
         "status": overall,
         "env": ENV,

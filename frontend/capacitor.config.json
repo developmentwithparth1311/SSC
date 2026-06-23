@@ -3,8 +3,8 @@
   "appName": "SSC",
   "webDir": "build",
   "server": {
-    "androidScheme": "http",
-    "cleartext": true
+    "androidScheme": "https",
+    "cleartext": false
   },
   "plugins": {
     "SplashScreen": {

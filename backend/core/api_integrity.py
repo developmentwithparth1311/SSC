@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, Optional
 
+from core.migration_policy import normalize_message_protocol
 from core.utils import iso
 
 # Never persist or return on messages/statuses (length side-channel + redundant handles).
@@ -23,9 +24,15 @@ def project_message_for_viewer(msg: dict, viewer_id: str) -> dict:
     if not msg:
         return msg
     out = dict(msg)
-    keys = out.get("encrypted_keys") or {}
-    own = keys.get(viewer_id)
-    out["encrypted_keys"] = {viewer_id: own} if own else {}
+    protocol = normalize_message_protocol(out.get("protocol"))
+    out["protocol"] = protocol
+    if protocol == "signal_v1":
+        out.pop("encrypted_keys", None)
+        out.pop("iv", None)
+    else:
+        keys = out.get("encrypted_keys") or {}
+        own = keys.get(viewer_id)
+        out["encrypted_keys"] = {viewer_id: own} if own else {}
 
     attach_keys = out.get("attachment_encrypted_keys")
     if attach_keys:

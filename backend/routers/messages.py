@@ -10,6 +10,8 @@ from core.logging_config import logger
 from core.models import MarkReadIn, SendMessageIn
 from core.push_helpers import send_push_for_message
 from core.api_integrity import project_message_for_viewer, sanitize_message_for_storage
+from core.signal_message_policy import SignalMessageValidationError, validate_send_payload
+from core.signal_policy import ProtocolVersion
 from core.realtime import broadcast_message_to_conversation, broadcast_to_conversation
 from core.retention import expires_at_from_now, message_read_expiry_fields
 from core.retention_db import bump_conversation_activity
@@ -30,9 +32,6 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
         if not await are_contacts(current["user_id"], other):
             raise HTTPException(403, "Contact required to message this user")
 
-    missing = [uid for uid in conv["participants"] if uid not in body.encrypted_keys]
-    if missing:
-        raise HTTPException(400, f"encrypted_keys missing for participants: {','.join(missing)}")
     if len(body.ciphertext or "") > 300000:
         raise HTTPException(413, "Message too large")
 
@@ -40,8 +39,23 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
         logger.warning(f"rate-limit message user={current['user_id']}")
         raise HTTPException(429, "Too many messages sent, please slow down")
 
-    if len(body.encrypted_keys) > 50 or any(len(v) > 1000 for v in body.encrypted_keys.values()):
-        raise HTTPException(413, "Encrypted keys too large or too many")
+    try:
+        normalized = validate_send_payload(
+            protocol=body.protocol,
+            ciphertext=body.ciphertext,
+            iv=body.iv,
+            encrypted_keys=body.encrypted_keys,
+            signal_message_type=body.signal_message_type,
+            is_group=bool(conv.get("is_group")),
+            participant_ids=list(conv.get("participants") or []),
+        )
+    except SignalMessageValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if normalized["protocol"] == ProtocolVersion.LEGACY_RSA.value:
+        enc_keys = normalized["encrypted_keys"] or {}
+        if len(enc_keys) > 50 or any(len(v) > 1000 for v in enc_keys.values()):
+            raise HTTPException(413, "Encrypted keys too large or too many")
 
     created = now_utc()
     expires = expires_at_from_now()
@@ -49,9 +63,11 @@ async def send_message(body: SendMessageIn, current=Depends(get_current_user)):
         "message_id": f"m_{uuid.uuid4().hex[:14]}",
         "conversation_id": body.conversation_id,
         "sender_id": current["user_id"],
-        "ciphertext": body.ciphertext,
-        "iv": body.iv,
-        "encrypted_keys": body.encrypted_keys,
+        "protocol": normalized["protocol"],
+        "ciphertext": normalized["ciphertext"],
+        "iv": normalized["iv"],
+        "encrypted_keys": normalized["encrypted_keys"],
+        "signal_message_type": normalized["signal_message_type"],
         "message_type": body.message_type,
         "attachment_id": body.attachment_id,
         "attachment_iv": body.attachment_iv,

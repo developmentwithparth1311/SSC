@@ -77,11 +77,11 @@ E2E_SURFACES: Dict[str, E2ESurface] = {
     ),
     "webrtc_signaling": E2ESurface(
         name="webrtc_signaling",
-        status=E2EStatus.DOCUMENTED,
-        server_sees="SDP + ICE in cleartext over WebSocket",
+        status=E2EStatus.PARTIAL,
+        server_sees="1:1 SDP/ICE opaque signal_v1 ciphertext; group calls legacy cleartext",
         engine2_step=None,
         later_engine="8",
-        notes="Media is P2P; signaling is server-visible.",
+        notes="Engine 8.7 — ratchet-wrapped signaling for 1:1; media remains P2P.",
     ),
     "push": E2ESurface(
         name="push",
@@ -102,23 +102,24 @@ INTEGRITY_GAPS: List[IntegrityGap] = [
     IntegrityGap("G3", "JWT in file download URL (?auth=)", GapSeverity.HIGH, "2.3", resolved=True),
     IntegrityGap("G4", "Plaintext file upload still accepted", GapSeverity.MEDIUM, "2.5", resolved=True),
     IntegrityGap("G5", "plaintext_length sent to server", GapSeverity.LOW, "2.4", resolved=True),
-    IntegrityGap("G6", "WebRTC signaling cleartext on server", GapSeverity.HIGH, None, "8"),
+    IntegrityGap("G6", "WebRTC signaling cleartext on server", GapSeverity.HIGH, None, "8", resolved=True),
     IntegrityGap("G7", "Verified badge is localStorage flag only", GapSeverity.MEDIUM, "2.6", resolved=True),
     IntegrityGap("G8", "Legacy attachment download without E2E keys", GapSeverity.MEDIUM, "2.5", resolved=True),
-    IntegrityGap("G9", "No Signal Protocol / Double Ratchet", GapSeverity.HIGH, None, "8"),
+    IntegrityGap("G9", "No Signal Protocol / Double Ratchet", GapSeverity.HIGH, None, "8", resolved=True),
 ]
 
 CLIENT_KEY_STORAGE: Dict[str, str] = {
-    "localStorage.ssc_token": "jwt_session",
+    "sessionStore.nativeMemoryToken": "jwt_session_memory_only_native",
     "localStorage.ssc_verified_v2_*": "safety_number_and_fingerprint_bound",
     "react_state.privateKey": "decrypted_key_in_memory_session_only",
 }
 
-# Removed in Engine 2.2 — purge on startup via frontend/src/lib/vault.js
+# Removed in Engine 2.2 / 5 — purge on startup
 LEGACY_CLIENT_KEY_STORAGE: Dict[str, str] = {
     "sessionStorage.ssc_pk_jwk": "decrypted_private_key_jwk",
     "sessionStorage.ssc_pk_unlocked": "unlock_flag",
     "localStorage.ssc_verified_*": "legacy_boolean_verified_flag",
+    "localStorage.ssc_token": "legacy_jwt_purged_engine_5",
 }
 
 ENGINE2_STEPS: List[Tuple[str, str, bool]] = [

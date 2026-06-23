@@ -7,6 +7,7 @@ import { clearLocalStorageSessionSecrets } from './localStorageFootprint';
 import { clearSessionStorageFootprint } from './sessionStorageFootprint';
 import { purgeLegacyPrivateKeyFromSession } from './vault';
 import { purgeLegacyVerificationFlags } from './verification';
+import { clearSessionToken, getSessionToken, usesBearerAuth } from './sessionStore';
 
 export const PANIC_REDIRECT = '/login?panic=1';
 export const PANIC_SERVER_PATH = '/panic-wipe';
@@ -17,12 +18,15 @@ function capturePreWipeCredentials() {
     return { authToken: null, nativePushToken: null };
   }
   return {
-    authToken: localStorage.getItem('ssc_token'),
+    authToken: usesBearerAuth() ? getSessionToken() : null,
     nativePushToken: localStorage.getItem('ssc_native_push_token'),
   };
 }
 
 function authHeaders(token) {
+  if (!usesBearerAuth()) {
+    return {};
+  }
   return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
 }
 
@@ -33,6 +37,7 @@ function authHeaders(token) {
  */
 export function executeClientFootprintWipe(reason) {
   dispatchMemoryWipe(reason);
+  clearSessionToken();
   clearLocalStorageSessionSecrets();
   purgeLegacyPrivateKeyFromSession();
   clearSessionStorageFootprint(reason);

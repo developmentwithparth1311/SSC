@@ -112,7 +112,7 @@ METADATA_GAPS: List[MetadataGap] = [
         "M5", "Translation sends plaintext to server when enabled", GapSeverity.CRITICAL, None, "9", resolved=False,
     ),
     MetadataGap(
-        "M6", "WebRTC signaling cleartext on server", GapSeverity.HIGH, None, "8", resolved=False,
+        "M6", "WebRTC signaling cleartext on server", GapSeverity.HIGH, None, "8", resolved=True,
     ),
 ]
 

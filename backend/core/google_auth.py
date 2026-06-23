@@ -101,4 +101,6 @@ def exchange_code(code: str) -> dict:
 def frontend_redirect(platform: str, token: str, needs_setup: bool) -> str:
     base = NATIVE_OAUTH_REDIRECT if platform == "native" else FRONTEND_OAUTH_REDIRECT
     flag = "1" if needs_setup else "0"
+    if platform == "web":
+        return f"{base}/auth/google?needs_setup={flag}"
     return f"{base}/auth/google?token={token}&needs_setup={flag}"
