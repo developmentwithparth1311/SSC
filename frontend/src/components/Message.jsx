@@ -55,7 +55,11 @@ export default function Message({ msg, isMine, myUserId, privateKey, autoTransla
         return;
       }
       const out = data.translated;
-      const bad = !out || /PLEASE SELECT TWO DISTINCT LANGUAGES/i.test(out) || /MYMEMORY WARNING/i.test(out);
+      const bad = !out
+        || /PLEASE SELECT TWO DISTINCT LANGUAGES/i.test(out)
+        || /MYMEMORY WARNING/i.test(out)
+        || /AUTO_DETECT LANGUAGE NOT SUPPORTED/i.test(out)
+        || data.note === 'translation service unavailable or same language';
       if (!bad && out.toLowerCase() !== plaintext.toLowerCase()) {
         setTranslated(out);
         setShowTranslated(true);
