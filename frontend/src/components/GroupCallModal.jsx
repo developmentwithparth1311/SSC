@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
+import { useLocale } from '../context/LocaleContext';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 
 /**
@@ -32,6 +34,7 @@ async function getRTCConfig() {
 export default function GroupCallModal({
   mode, direction, members, me, user, conversationId, socket, signal, onClose,
 }) {
+  const { t } = useLocale();
   // members: [{user_id, username}] EXCLUDING me
   const [peers, setPeers] = useState({}); // user_id -> { pc, stream, username }
   const peersRef = useRef({});
@@ -92,7 +95,7 @@ export default function GroupCallModal({
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
     } catch (e) {
-      alert('Cannot access camera/microphone: ' + e.message);
+      toast.error(t('callMediaError'));
       onClose && onClose();
       return;
     }

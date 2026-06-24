@@ -129,7 +129,24 @@ async def list_statuses(current=Depends(get_current_user)):
     items = await cur.to_list(200)
     me_id = current["user_id"]
     visible = [it for it in items if await _user_can_view_status(me_id, it)]
-    return [project_status_for_viewer(it, me_id) for it in visible]
+    author_ids = list({it.get("author_id") for it in visible if it.get("author_id")})
+    avatar_by_id = {}
+    if author_ids:
+        cur_users = db.users.find(
+            {"user_id": {"$in": author_ids}},
+            {"_id": 0, "user_id": 1, "avatar": 1},
+        )
+        async for u in cur_users:
+            if u.get("avatar"):
+                avatar_by_id[u["user_id"]] = u["avatar"]
+    out = []
+    for it in visible:
+        row = project_status_for_viewer(it, me_id)
+        aid = row.get("author_id")
+        if aid and aid in avatar_by_id:
+            row["author_avatar"] = avatar_by_id[aid]
+        out.append(row)
+    return out
 
 
 @router.post("/viewed")

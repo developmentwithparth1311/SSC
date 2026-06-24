@@ -12,6 +12,7 @@ import {
   isSignalStatusV1,
 } from '../lib/signal/statuses';
 import { subscribeMemoryWipe } from '../lib/memoryWipe';
+import Avatar from './Avatar';
 
 /**
  * Stories bar: horizontal scroll at top of sidebar with avatars.
@@ -61,8 +62,12 @@ export function StoriesBar({ me, privateKey, onView }) {
             <button key={g.author_id} onClick={() => onView && onView(g)} data-testid={`story-${g.author_username}`}
               className="flex flex-col items-center gap-1 group">
               <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#00E5FF] via-[#FFD600] to-[#34C759]">
-                <div className="w-full h-full rounded-full bg-[#0A0A0A] flex items-center justify-center font-mono text-[10px]">
-                  {g.author_username.slice(0, 2).toUpperCase()}
+                <div className="w-full h-full rounded-full bg-[#0A0A0A] overflow-hidden flex items-center justify-center">
+                  <Avatar
+                    user={{ username: g.author_username, avatar: g.author_avatar }}
+                    size="md"
+                    className="!rounded-full !w-full !h-full"
+                  />
                 </div>
               </div>
               <span className="text-[9px] font-mono text-[#A1A1AA] tracking-wider truncate max-w-[64px]">

@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash } from '@phosphor-icons/react';
+import { useLocale } from '../context/LocaleContext';
 import { getBackendUrl } from '../lib/platform';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
+import Avatar from './Avatar';
 
 /**
  * CallModal handles WebRTC voice/video calls.
@@ -32,6 +35,7 @@ async function getRTCConfig() {
 }
 
 export default function CallModal({ mode, direction, peer, user, socket, signal, onClose }) {
+  const { t } = useLocale();
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
@@ -85,7 +89,7 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
     } catch (e) {
-      alert('Cannot access camera/microphone: ' + e.message);
+      toast.error(t('callMediaError'));
       onClose && onClose();
       return;
     }
@@ -160,8 +164,8 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
           <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center">
-            <div className="w-32 h-32 rounded-md bg-[#232323] flex items-center justify-center text-3xl font-mono mb-4">
-              {peer.username?.slice(0, 2).toUpperCase()}
+            <div className="mb-4">
+              <Avatar user={peer} size="lg" className="!w-32 !h-32 !text-3xl !rounded-md" />
             </div>
             <div className="font-mono text-lg">@{peer.username}</div>
           </div>

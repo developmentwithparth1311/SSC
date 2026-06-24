@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { MagnifyingGlass, Plus, SignOut, Phone, VideoCamera, PaperPlaneTilt, Paperclip, ShieldCheck, Translate, X, LockKey, UsersThree, Gear, Checks, Check, Microphone, CaretLeft } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, SignOut, Phone, VideoCamera, PaperPlaneTilt, Paperclip, ShieldCheck, Translate, X, LockKey, UsersThree, Gear, Microphone, CaretLeft } from '@phosphor-icons/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { ChatSocket } from '../lib/socket';
@@ -15,6 +15,8 @@ import PanicButton from '../components/PanicButton';
 import CallModal from '../components/CallModal';
 import SettingsModal from '../components/SettingsModal';
 import OnboardingCoach, { hasCompletedOnboarding } from '../components/OnboardingCoach';
+import Avatar from '../components/Avatar';
+import ConfirmDialog from '../components/ConfirmDialog';
 import CreateGroupModal from '../components/CreateGroupModal';
 import { useLocale } from '../context/LocaleContext';
 import { useMobileLayout } from '../lib/use-mobile';
@@ -22,7 +24,7 @@ import MobileChatMenu, { MenuAction } from '../components/MobileChatMenu';
 import GroupCallModal from '../components/GroupCallModal';
 import { StoriesBar, StoryViewer } from '../components/Stories';
 import ContactsModal from '../components/ContactsModal';
-import { formatPeerPresence, isPeerOnline } from '../lib/presence';
+import { formatPeerPresence } from '../lib/presence';
 
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
 import { getSessionToken } from '../lib/sessionStore';
@@ -88,6 +90,10 @@ export default function ChatHome() {
   const [callState, setCallState] = useState(null); // { mode, direction, peer, signal }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [confirmRemoveUid, setConfirmRemoveUid] = useState(null);
+  const [mobileMsgSearchOpen, setMobileMsgSearchOpen] = useState(false);
+  const userNearBottomRef = useRef(true);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [storyGroup, setStoryGroup] = useState(null);
@@ -160,6 +166,8 @@ export default function ChatHome() {
 
   const leaveChat = () => {
     setChatMenuOpen(false);
+    setMobileMsgSearchOpen(false);
+    setMessageFilter('');
     goToConversation(null);
   };
 
@@ -246,22 +254,24 @@ export default function ChatHome() {
         return;
       }
       if (data.group) {
+        const members = (data.members || []).filter((m) => m.user_id !== user?.user_id);
+        if (members.length === 0) members.push({ user_id: data.from, username: peerData.username });
         setGroupCallState({
           mode,
           direction: payload?.action === 'answer' ? 'incoming-accepted' : 'incoming',
-          members: [],
-          signal: { from: data.from, from_username: peerData.username },
+          members,
+          signal: { from: data.from, from_username: peerData.username, sdp: data.sdp, members: data.members },
         });
       } else {
         setCallState({
           mode,
           direction: payload?.action === 'answer' ? 'incoming-accepted' : 'incoming',
           peer: peerData,
-          signal: null,
+          signal: data.sdp ? { sdp: data.sdp } : null,
         });
       }
     } catch {}
-  }, [goToConversation]);
+  }, [goToConversation, user?.user_id]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(PENDING_CALL_KEY);
@@ -330,7 +340,9 @@ export default function ChatHome() {
         await api.post(`/contacts/${uid}/block`);
       }
       await loadMyContacts();
-    } catch {}
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
+    }
   };
 
   const toggleMute = async (uid) => {
@@ -343,17 +355,27 @@ export default function ChatHome() {
         await api.post(`/contacts/${uid}/mute`);
       }
       await loadMyContacts();
-    } catch {}
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
+    }
   };
 
-  const removeContact = async (uid) => {
-    if (!confirm('Remove contact?')) return;
+  const removeContact = (uid) => {
+    setConfirmRemoveUid(uid);
+  };
+
+  const confirmRemoveContact = async () => {
+    const uid = confirmRemoveUid;
+    if (!uid) return;
+    setConfirmRemoveUid(null);
     try {
       await api.delete(`/contacts/${uid}`);
       await loadMyContacts();
-      // reload convs if needed
       await loadConversations();
-    } catch {}
+      toast.success(t('contactRemoved'));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
+    }
   };
 
   useEffect(() => {
@@ -521,8 +543,19 @@ export default function ChatHome() {
     }
   }, [messages, activeId, user]);
 
+  const onMessagesScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userNearBottomRef.current = dist < 80;
+  };
+
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (userNearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages, activeId]);
 
   // ─── Search users ───
@@ -714,13 +747,27 @@ export default function ChatHome() {
   const onFileChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
+    if (!file || uploadBusy) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error(t('fileTooLarge'));
+      return;
+    }
+    if (!privateKey && !(await shouldSendWithSignal({ isGroup, peer, user, members: activeConv?.members || [] }))) {
+      setUnlockOpen(true);
+      return;
+    }
+    setUploadBusy(true);
     try {
       const type = (file.type || '').startsWith('image/') ? 'image' : 'file';
       const { fileId, attachmentEnc } = await uploadEncryptedAttachment(file, file.name, file.type || 'application/octet-stream');
       await sendMessage(file.name, type, fileId, attachmentEnc);
-    } catch (e) {
-      toast.error(e?.message?.includes('encryption keys') ? e.message : 'Upload failed');
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 413) toast.error(t('fileTooLarge'));
+      else if (err?.message?.includes('encryption keys')) toast.error(err.message);
+      else toast.error(err?.response?.data?.detail || t('uploadFailed'));
+    } finally {
+      setUploadBusy(false);
     }
   };
 
@@ -853,9 +900,7 @@ export default function ChatHome() {
       <aside className={`${showList ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 lg:w-96 md:border-r border-[#27272A] shrink-0 min-h-0`}>
         <div className="glass-header safe-top safe-x px-4 py-3 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2" data-testid="sidebar-logo">
-            <div className="w-7 h-7 rounded-md bg-[#00E5FF] flex items-center justify-center">
-              <LockKey size={14} weight="bold" className="text-black" />
-            </div>
+            <Avatar user={user} size="xs" />
             <div>
               <div className="font-mono text-xs tracking-[0.25em]">SSC</div>
               <div className="text-[10px] font-mono text-[#A1A1AA]">@{user?.username}</div>
@@ -919,12 +964,12 @@ export default function ChatHome() {
               data-testid={`conversation-${c.conversation_id}`}
               onClick={() => goToConversation(c.conversation_id)}
               className={`w-full text-left px-4 py-3 border-b border-[#27272A] flex items-center gap-3 hover:bg-[#1A1A1A] transition ${activeId === c.conversation_id ? 'bg-[#1A1A1A]' : ''}`}>
-              <div className={`w-10 h-10 rounded-md flex items-center justify-center font-mono text-xs ${c.is_group ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
-                {c.is_group ? <UsersThree size={16} /> : (c.peer?.username?.slice(0, 2).toUpperCase() || '??')}
-                {!c.is_group && isPeerOnline(c.peer) && (
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#34C759] rounded-full tac-border" />
-                )}
-              </div>
+              <Avatar
+                user={c.is_group ? null : c.peer}
+                isGroup={c.is_group}
+                size="md"
+                showOnline={!c.is_group}
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium truncate">
@@ -971,17 +1016,12 @@ export default function ChatHome() {
                 </button>
               )}
               <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-                <div className={`w-9 h-9 rounded-md flex items-center justify-center font-mono text-xs shrink-0 ${isGroup ? 'bg-[#1E2A38]' : 'bg-[#232323]'} relative`}>
-                  {isGroup ? <UsersThree size={16} /> : peer?.username?.slice(0, 2).toUpperCase()}
-                  {!isGroup && isPeerOnline(peer) && (
-                    <div className="absolute bottom-0 right-0 w-2 h-2 bg-[#34C759] rounded-full tac-border" />
-                  )}
-                </div>
+                <Avatar user={isGroup ? null : peer} isGroup={isGroup} size="sm" showOnline={!isGroup} />
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
                     {headerTitle}
                   </div>
-                  <div className={`text-[10px] font-mono tracking-wider truncate flex items-center gap-1 ${peerVerified && !isGroup ? 'text-[#34C759]' : 'text-[#34C759]'}`}>
+                  <div className={`text-[10px] font-mono tracking-wider truncate flex items-center gap-1 ${peerVerified && !isGroup ? 'text-[#34C759]' : 'text-[#A1A1AA]'}`}>
                     <ShieldCheck size={10} weight="fill" className="shrink-0" />
                     <span className="truncate" data-testid="chat-peer-status">
                       {isGroup
@@ -1017,10 +1057,19 @@ export default function ChatHome() {
                           </MenuAction>
                         )}
                         <MenuAction
+                          testId="mobile-search-messages"
+                          onClick={() => {
+                            setChatMenuOpen(false);
+                            setMobileMsgSearchOpen((v) => !v);
+                          }}
+                        >
+                          {t('searchMessages')}
+                        </MenuAction>
+                        <MenuAction
                           testId="mobile-verify-identity"
                           onClick={() => { setChatMenuOpen(false); setVerifyOpen(true); }}
                         >
-                          VERIFY IDENTITY
+                          {t('verifyIdentity').toUpperCase()}
                         </MenuAction>
                         <MenuAction
                           testId="mobile-block"
@@ -1055,7 +1104,7 @@ export default function ChatHome() {
                     {!isGroup && peer && (
                       <>
                         <button onClick={() => setVerifyOpen(true)} className="text-[10px] px-2 py-1 tac-border rounded text-[#34C759]" data-testid="verify-identity-button">
-                          VERIFY
+                          {t('verifyIdentity').toUpperCase()}
                         </button>
                         <button onClick={() => toggleBlock(peer.user_id)} className="text-[10px] px-2 py-1 tac-border rounded" data-testid="block-button">
                           {peerContact?.blocked ? t('unblock').toUpperCase() : t('block').toUpperCase()}
@@ -1092,7 +1141,20 @@ export default function ChatHome() {
               </div>
             </header>
 
-            <div ref={scrollRef} className="chat-scroll px-3 md:px-6 py-3 flex flex-col gap-3">
+            {(isMobile && mobileMsgSearchOpen) && (
+              <div className="md:hidden px-3 py-2 border-b border-[#27272A] shrink-0">
+                <input
+                  value={messageFilter}
+                  onChange={(e) => setMessageFilter(e.target.value)}
+                  placeholder={t('searchMessages')}
+                  className="w-full text-sm px-3 py-2 bg-[#1A1A1A] border border-[#27272A] rounded-md"
+                  data-testid="mobile-message-filter"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div ref={scrollRef} onScroll={onMessagesScroll} className="chat-scroll px-3 md:px-6 py-3 flex flex-col gap-3">
               <div className="hidden md:block px-3 py-1">
                 <input value={messageFilter} onChange={(e) => setMessageFilter(e.target.value)} placeholder={t('searchMessages')} className="w-full text-xs bg-transparent border-0 border-b border-[#27272A] pb-1" data-testid="message-filter" />
               </div>
@@ -1138,8 +1200,9 @@ export default function ChatHome() {
 
             <form onSubmit={onSendText} className="chat-composer safe-bottom safe-x border-t border-[#27272A] px-2 md:px-3 py-2 flex items-center gap-2">
               <input ref={fileInputRef} type="file" hidden onChange={onFileChange} data-testid="file-input" />
-              <button type="button" onClick={onPickFile} data-testid="attach-button"
-                className="w-11 h-11 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center shrink-0">
+              <button type="button" onClick={onPickFile} disabled={uploadBusy} data-testid="attach-button"
+                className="w-11 h-11 rounded-md tac-border bg-[#121212] active:bg-[#1A1A1A] flex items-center justify-center shrink-0 disabled:opacity-40"
+                title={uploadBusy ? t('uploadInProgress') : undefined}>
                 <Paperclip size={18} />
               </button>
               <button type="button" onClick={isRecording ? stopRecording : startRecording} data-testid="voice-button"
@@ -1197,9 +1260,7 @@ export default function ChatHome() {
                 return (
                   <button key={u.user_id} onClick={() => startConversation(u)} data-testid={`search-result-${u.username}`}
                     className="w-full text-left px-3 py-2 rounded-md hover:bg-[#1A1A1A] flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-md bg-[#232323] flex items-center justify-center font-mono text-xs">
-                      {u.username.slice(0, 2).toUpperCase()}
-                    </div>
+                    <Avatar user={u} size="sm" />
                     <div className="flex-1">
                       <div className="text-sm">@{u.username} {isContact && '✓'} {isMuted && `(${t('muted')})`}</div>
                       <div className="text-[10px] font-mono text-[#A1A1AA]">
@@ -1254,8 +1315,8 @@ export default function ChatHome() {
       {callState && callState.direction === 'incoming' && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center">
           <div className="text-center">
-            <div className="w-24 h-24 rounded-md bg-[#232323] mx-auto flex items-center justify-center font-mono text-2xl mb-4">
-              {callState.peer.username?.slice(0, 2).toUpperCase()}
+            <div className="mx-auto mb-4">
+              <Avatar user={callState.peer} size="xl" />
             </div>
             <div className="font-mono text-lg">@{callState.peer.username}</div>
             <div className="text-xs font-mono text-[#A1A1AA] tracking-widest mt-1">{callState.mode === 'video' ? t('incomingVideoCall') : t('incomingAudioCall')}</div>
@@ -1308,7 +1369,20 @@ export default function ChatHome() {
         me={user}
         peer={peer}
       />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onUnlockVault={() => setUnlockOpen(true)}
+      />
+      <ConfirmDialog
+        open={!!confirmRemoveUid}
+        title={t('deleteContact')}
+        message={t('deleteContactConfirm')}
+        danger
+        onConfirm={confirmRemoveContact}
+        onCancel={() => setConfirmRemoveUid(null)}
+        testId="confirm-remove-contact"
+      />
       <OnboardingCoach
         open={onboardingOpen}
         userId={user?.user_id}

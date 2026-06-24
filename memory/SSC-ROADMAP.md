@@ -181,9 +181,11 @@ cd C:\Users\smash\SSC-main\backend
 - [x] Automated smoke: `e2e_smoke.py` + Engine 1–5/8/9 gates + production `/api/health` (24 Jun 2026)
 - [x] Settings Security hub + 2FA wired (`SettingsModal` + `TwoFAModal`)
 - [x] First-run onboarding coach (3 steps)
+- [x] In-app UI/UX pass — avatars, pro Settings, ConfirmDialog, smart scroll, file upload gates, mobile message search, i18n es/ro (24 Jun 2026)
+- [x] `reset_tester_accounts.py` — purge `e2e*`, `testfriend`, `@ssc.dev` (preserve `raul1988`)
+- [ ] Rebuild APK + Windows installer (after founder UI sign-off — **not yet**)
 - [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual — APK on device)
 - [ ] TURN verification on cellular/Wi‑Fi mix (founder manual — same session as two-phone)
-- [ ] Reset 3 tester accounts after production redeploy (unified identity)
 
 ### P1 — Product / security
 - [x] Engine 8.9: Signal attachments (1:1 Android)
@@ -223,7 +225,7 @@ cd C:\Users\smash\SSC-main\backend
 | `e2e_smoke.py` | **PASS** (health, contacts, messages, files, statuses, panic wipe) |
 | Production `/api/health` | **PASS** (`env=production`, mongo + redis ok) |
 | WS fan-out | Redis pub-sub when `REDIS_URL` set · `ws_fanout` in `/api/health` |
-| Frontend tests | **26+ passed** (`yarn test:ci`) |
+| Frontend tests | **29 passed** (`yarn test:ci`) |
 | AGPL gate | **PASS** (`run_agpl_gate.py`) |
 | Engine 10 gate | **PASS** (`run_engine10_gate.py`) |
 | Unified identity gate | **PASS** (`run_unified_identity_gate.py`) |
@@ -265,3 +267,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | Unified identity — `identity_primary` signal_v1, prekeys required on installed clients |
 | 2026-06-24 | Contact graph privacy — blind seals, encrypted rosters, M4 closed |
 | 2026-06-24 | UX gaps — Settings Security + 2FA, onboarding coach, PRD sync, Engine 3 proof fix |
+| 2026-06-24 | In-app UI/UX pass — Avatar, Settings profile/avatar, ConfirmDialog, scroll/upload/call wiring, es/ro i18n |
