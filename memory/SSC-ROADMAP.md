@@ -17,7 +17,7 @@
 4. **Release gate** — TASK I (QA matrix) must be green before Firebase testers beyond founder.
 
 **Current builds:** APK v1.0.4 build 6 · Windows `SSC-Setup-1.0.4.exe` · API `ssc-api-00012-bbc`
-**Last task completed:** TASK G — OAuth & navigation (`pending`)
+**Last task completed:** TASK G — OAuth & navigation (`3b938de`)
 **Next task:** TASK D — Android permissions & calls
 
 ---
