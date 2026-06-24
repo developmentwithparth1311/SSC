@@ -3,6 +3,11 @@ import { toast } from 'sonner';
 import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
+import {
+  acquireLocalMediaStream,
+  bindLocalPreview,
+  bindRemoteStream,
+} from '../lib/callMedia';
 
 /**
  * GroupCallModal — full-mesh WebRTC for up to ~6 participants in a group.
@@ -38,6 +43,7 @@ export default function GroupCallModal({
   // members: [{user_id, username}] EXCLUDING me
   const [peers, setPeers] = useState({}); // user_id -> { pc, stream, username }
   const peersRef = useRef({});
+  const remoteAudioRefs = useRef({});
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const [muted, setMuted] = useState(false);
@@ -78,7 +84,13 @@ export default function GroupCallModal({
       if (e.candidate) relaySignaling({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
     };
     pc.ontrack = (e) => {
-      setPeers((cur) => ({ ...cur, [peerId]: { ...(cur[peerId] || {}), stream: e.streams[0], username: peerUsername } }));
+      const stream = e.streams[0];
+      setPeers((cur) => ({ ...cur, [peerId]: { ...(cur[peerId] || {}), stream, username: peerUsername } }));
+      bindRemoteStream({
+        videoEl: null,
+        audioEl: remoteAudioRefs.current[peerId],
+        stream,
+      });
     };
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current));
@@ -87,13 +99,23 @@ export default function GroupCallModal({
     return pc;
   };
 
+  useEffect(() => {
+    Object.entries(peers).forEach(([uid, p]) => {
+      if (p.stream) {
+        bindRemoteStream({
+          videoEl: null,
+          audioEl: remoteAudioRefs.current[uid],
+          stream: p.stream,
+        });
+      }
+    });
+  }, [peers]);
+
   const setup = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true, video: mode === 'video' ? { width: 480, height: 360 } : false,
-      });
+      const stream = await acquireLocalMediaStream(mode);
       localStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      bindLocalPreview(localVideoRef.current, stream);
     } catch (e) {
       toast.error(t('callMediaError'));
       onClose && onClose();
@@ -201,18 +223,33 @@ export default function GroupCallModal({
   const cols = tiles.length <= 2 ? 1 : tiles.length <= 4 ? 2 : 3;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9998] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 safe-top safe-bottom">
       <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 rounded font-mono text-[10px] tracking-widest text-[#A1A1AA]">
         GROUP_CALL · E2E · {fmt(duration)} · {tiles.length} ON CALL
       </div>
       <div className="w-full max-w-5xl grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {tiles.map((t) => (
           <div key={t.user_id} className="aspect-video bg-[#121212] rounded-md tac-border relative overflow-hidden" data-testid={`group-call-tile-${t.username}`}>
+            {!t.isLocal && (
+              <audio
+                autoPlay
+                playsInline
+                className="sr-only"
+                ref={(el) => { remoteAudioRefs.current[t.user_id] = el; }}
+                data-testid={`group-call-audio-${t.username}`}
+              />
+            )}
             {mode === 'video' ? (
               t.isLocal ? (
                 <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
               ) : (
-                <video autoPlay playsInline className="w-full h-full object-cover" ref={(el) => { if (el && t.stream) el.srcObject = t.stream; }} />
+                <video
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                  ref={(el) => { if (el && t.stream) bindRemoteStream({ videoEl: el, audioEl: remoteAudioRefs.current[t.user_id], stream: t.stream }); }}
+                />
               )
             ) : (
               <div className="w-full h-full flex items-center justify-center">

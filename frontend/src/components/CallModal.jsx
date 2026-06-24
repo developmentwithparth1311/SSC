@@ -4,6 +4,11 @@ import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash } fro
 import { useLocale } from '../context/LocaleContext';
 import { getBackendUrl } from '../lib/platform';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
+import {
+  acquireLocalMediaStream,
+  bindLocalPreview,
+  bindRemoteStream,
+} from '../lib/callMedia';
 import Avatar from './Avatar';
 
 /**
@@ -40,6 +45,7 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'ringing');
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
@@ -55,8 +61,11 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
   useEffect(() => {
     if (status !== 'connected') return;
     startedAtRef.current = Date.now();
-    const t = setInterval(() => setDuration(Math.floor((Date.now() - startedAtRef.current) / 1000)), 500);
-    return () => clearInterval(t);
+    const timer = setInterval(
+      () => setDuration(Math.floor((Date.now() - startedAtRef.current) / 1000)),
+      500,
+    );
+    return () => clearInterval(timer);
   }, [status]);
 
   const setupCall = async () => {
@@ -72,9 +81,11 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       }
     };
     pc.ontrack = (e) => {
-      if (remoteVideoRef.current && e.streams[0]) {
-        remoteVideoRef.current.srcObject = e.streams[0];
-      }
+      bindRemoteStream({
+        videoEl: mode === 'video' ? remoteVideoRef.current : null,
+        audioEl: remoteAudioRef.current,
+        stream: e.streams[0],
+      });
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') setStatus('connected');
@@ -82,12 +93,10 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     };
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true, video: mode === 'video' ? { width: 640, height: 480 } : false,
-      });
+      const stream = await acquireLocalMediaStream(mode);
       localStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+      bindLocalPreview(localVideoRef.current, stream);
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     } catch (e) {
       toast.error(t('callMediaError'));
       onClose && onClose();
@@ -138,7 +147,9 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
 
   const cleanup = () => {
     try { pcRef.current?.close(); } catch {}
-    try { localStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
+    try { localStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch {}
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
   };
 
   const endCall = () => {
@@ -147,21 +158,22 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
   };
 
   const toggleMute = () => {
-    const t = localStreamRef.current?.getAudioTracks?.()[0];
-    if (t) { t.enabled = !t.enabled; setMuted(!t.enabled); }
+    const track = localStreamRef.current?.getAudioTracks?.()[0];
+    if (track) { track.enabled = !track.enabled; setMuted(!track.enabled); }
   };
   const toggleVideo = () => {
-    const t = localStreamRef.current?.getVideoTracks?.()[0];
-    if (t) { t.enabled = !t.enabled; setVideoOff(!t.enabled); }
+    const track = localStreamRef.current?.getVideoTracks?.()[0];
+    if (track) { track.enabled = !track.enabled; setVideoOff(!track.enabled); }
   };
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-[9998] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center safe-top safe-bottom">
+      <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" data-testid="call-remote-audio" />
       <div className="relative w-full max-w-3xl aspect-video bg-[#121212] rounded-md tac-border overflow-hidden">
         {mode === 'video' ? (
-          <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+          <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center">
             <div className="mb-4">

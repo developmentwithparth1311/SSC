@@ -15,6 +15,7 @@ import androidx.core.view.WindowCompat;
 import com.getcapacitor.BridgeActivity;
 
 import chat.ssc.secure.plugins.SscLibsignalPlugin;
+import chat.ssc.secure.plugins.SscMediaPermissionsPlugin;
 import chat.ssc.secure.plugins.SscTranslatePlugin;
 
 public class MainActivity extends BridgeActivity {
@@ -22,6 +23,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(SscLibsignalPlugin.class);
         registerPlugin(SscTranslatePlugin.class);
+        registerPlugin(SscMediaPermissionsPlugin.class);
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         applySystemBarColors();

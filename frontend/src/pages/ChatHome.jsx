@@ -35,6 +35,8 @@ import {
   setNativeBackHandler,
 } from '../lib/nativeBack';
 import { isNativeApp } from '../lib/platform';
+import { ensureMediaPermissions } from '../lib/mediaPermissions';
+import { startIncomingRingtone, stopIncomingRingtone } from '../lib/callRingtone';
 
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
 import { getSessionToken } from '../lib/sessionStore';
@@ -119,6 +121,7 @@ export default function ChatHome() {
       setStoryGroup(null);
       setCallState(null);
       setGroupCallState(null);
+      stopIncomingRingtone();
       setActiveId(null);
     });
     return () => {
@@ -278,6 +281,14 @@ export default function ChatHome() {
         setStoryGroup(null);
         return;
       }
+      if (callState?.direction === 'incoming') {
+        rejectCall();
+        return;
+      }
+      if (groupCallState?.direction === 'incoming') {
+        rejectGroupCall();
+        return;
+      }
       if (conversationId || activeId) {
         leaveChat();
         return;
@@ -298,7 +309,21 @@ export default function ChatHome() {
     searchOpen,
     settingsOpen,
     storyGroup,
+    callState,
+    groupCallState,
   ]);
+
+  const hasIncomingCall = (callState?.direction === 'incoming')
+    || (groupCallState?.direction === 'incoming');
+
+  useEffect(() => {
+    if (hasIncomingCall) {
+      startIncomingRingtone();
+    } else {
+      stopIncomingRingtone();
+    }
+    return () => stopIncomingRingtone();
+  }, [hasIncomingCall]);
 
   const handlePendingCall = useCallback(async (payload) => {
     const data = payload?.data || payload;
@@ -561,7 +586,11 @@ export default function ChatHome() {
               }
             }
             window.dispatchEvent(new CustomEvent('ssc-signal', { detail: signal }));
-            if (signal.type === 'call-end' || signal.type === 'call-reject') setCallState(null);
+            if (signal.type === 'call-end' || signal.type === 'call-reject') {
+              stopIncomingRingtone();
+              setCallState(null);
+              setGroupCallState(null);
+            }
           })();
         }
       },
@@ -848,6 +877,12 @@ export default function ChatHome() {
 
   // ─── Calls ───
   const startCall = async (mode) => {
+    const ok = await ensureMediaPermissions(
+      { audio: true, video: mode === 'video' },
+      { t },
+    );
+    if (!ok) return;
+
     if (isGroup && activeConv) {
       const members = (activeConv.members || []).filter((m) => m.user_id !== user?.user_id);
       if (members.length === 0) { toast.error('No members in this group'); return; }
@@ -861,21 +896,41 @@ export default function ChatHome() {
     setCallState({ mode, direction: 'outgoing', peer, signal: null });
   };
 
-  const acceptCall = () => {
+  const acceptCall = async () => {
+    if (!callState) return;
+    const ok = await ensureMediaPermissions(
+      { audio: true, video: callState.mode === 'video' },
+      { t },
+    );
+    if (!ok) return;
+    stopIncomingRingtone();
     setCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s);
   };
   const rejectCall = () => {
     if (!callState) return;
+    stopIncomingRingtone();
     socketRef.current?.send({ type: 'call-reject', to: callState.peer.user_id });
     setCallState(null);
   };
   const rejectGroupCall = () => {
     if (!groupCallState) return;
+    stopIncomingRingtone();
     const from = groupCallState.signal?.from;
     if (from) {
       socketRef.current?.send({ type: 'call-reject', to: from, group: true });
     }
     setGroupCallState(null);
+  };
+
+  const acceptGroupCall = async () => {
+    if (!groupCallState) return;
+    const ok = await ensureMediaPermissions(
+      { audio: true, video: groupCallState.mode === 'video' },
+      { t },
+    );
+    if (!ok) return;
+    stopIncomingRingtone();
+    setGroupCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s);
   };
 
   // ─── Typing ───
@@ -887,6 +942,8 @@ export default function ChatHome() {
   };
 
   const startRecording = async () => {
+    const ok = await ensureMediaPermissions({ audio: true, video: false }, { t });
+    if (!ok) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);
@@ -909,7 +966,7 @@ export default function ChatHome() {
       setIsRecording(true);
       setTimeout(() => { if (mr.state === 'recording') mr.stop(); }, 30000);
     } catch (e) {
-      toast.error('Cannot access microphone');
+      toast.error(t('micPermissionDenied'));
     }
   };
 
@@ -1276,8 +1333,11 @@ export default function ChatHome() {
 
       {/* Incoming call ring */}
       {callState && callState.direction === 'incoming' && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center">
-          <div className="text-center">
+        <div
+          className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex items-center justify-center safe-top safe-bottom pointer-events-auto"
+          data-testid="incoming-call-overlay"
+        >
+          <div className="text-center px-6">
             <div className="mx-auto mb-4">
               <Avatar user={callState.peer} size="xl" />
             </div>
@@ -1351,8 +1411,11 @@ export default function ChatHome() {
         <StoryViewer group={storyGroup} me={user} privateKey={privateKey} onClose={() => setStoryGroup(null)} />
       )}
       {groupCallState && groupCallState.direction === 'incoming' && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center">
-          <div className="text-center">
+        <div
+          className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-xl flex items-center justify-center safe-top safe-bottom pointer-events-auto"
+          data-testid="incoming-group-call-overlay"
+        >
+          <div className="text-center px-6">
             <div className="w-24 h-24 rounded-md bg-[#1E2A38] mx-auto flex items-center justify-center mb-4">
               <UsersThree size={28} className="text-[#00E5FF]" weight="duotone" />
             </div>
@@ -1364,7 +1427,7 @@ export default function ChatHome() {
               <button onClick={rejectGroupCall} data-testid="group-call-reject" className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110">
                 <Phone size={22} weight="fill" className="rotate-[135deg]" />
               </button>
-              <button onClick={() => setGroupCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s)} data-testid="group-call-accept" className="w-14 h-14 rounded-full bg-[#34C759] flex items-center justify-center hover:brightness-110">
+              <button onClick={acceptGroupCall} data-testid="group-call-accept" className="w-14 h-14 rounded-full bg-[#34C759] flex items-center justify-center hover:brightness-110">
                 <Phone size={22} weight="fill" />
               </button>
             </div>

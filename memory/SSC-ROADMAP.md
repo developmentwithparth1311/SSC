@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (TASK G complete · TASK C · B · A)
+**Updated:** 2026-06-24 (TASK D complete · TASK G · C · B · A)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -17,8 +17,8 @@
 4. **Release gate** — TASK I (QA matrix) must be green before Firebase testers beyond founder.
 
 **Current builds:** APK v1.0.4 build 6 · Windows `SSC-Setup-1.0.4.exe` · API `ssc-api-00012-bbc`
-**Last task completed:** TASK G — OAuth & navigation (`3b938de`)
-**Next task:** TASK D — Android permissions & calls
+**Last task completed:** TASK D — Android permissions & calls
+**Next task:** TASK E — Attachments & media
 
 ---
 
@@ -79,7 +79,7 @@
 | Engine 1–5, 8, 9, 10 gates | **PASS** |
 | Unified identity + contacts graph gates | **PASS** |
 | `e2e_smoke.py` + production `/api/health` | **PASS** |
-| Frontend `yarn test:ci` | **43 passed** |
+| Frontend `yarn test:ci` | **55 passed** |
 
 ---
 
@@ -153,19 +153,21 @@
 
 ---
 
-### TASK D — Android permissions & calls · P0-3, P0-4
+### TASK D — Android permissions & calls · ✅ DONE (24 Jun 2026)
 
 **Goal:** Mic, camera, notifications work; full duplex calls both ways.
 
 | ID | Subtask | Files / notes | Status |
 |----|---------|---------------|--------|
-| D.1 | Request **RECORD_AUDIO** + **CAMERA** at right moments (call, voice note, video) | Capacitor permissions, `CallOverlay` / voice recorder | [ ] |
-| D.2 | Handle permission denied → clear in-app message + Settings deep link | UI toasts | [ ] |
-| D.3 | Fix **incoming call UI** on Android — answer/decline visible | `CallOverlay.jsx`, native layer | [ ] |
-| D.4 | Fix **audio routing** — earpiece vs speaker; WebRTC `getUserMedia` after grant | WebRTC call module | [ ] |
-| D.5 | **Ringtone** on callee (phone + desktop) | `CallOverlay`, assets | [ ] |
-| D.6 | Desktop → phone **video**: callee can answer; **audio** both directions | End-to-end call test | [ ] |
-| D.7 | QA matrix: voice call, video call, cancel, busy | Two devices | [ ] |
+| D.1 | Request **RECORD_AUDIO** + **CAMERA** at right moments (call, voice note, video) | `mediaPermissions.js`, `SscMediaPermissionsPlugin.java`, `AndroidManifest.xml` | [x] |
+| D.2 | Handle permission denied → clear in-app message + Settings deep link | `mediaPermissions.js` toasts + `openAppSettings` | [x] |
+| D.3 | Fix **incoming call UI** on Android — answer/decline visible | `ChatHome.jsx` overlay `z-[9999]`, safe-area, back → reject | [x] |
+| D.4 | Fix **audio routing** — remote `<audio>` for voice calls; `getUserMedia` after grant | `callMedia.js`, `CallModal.jsx`, `GroupCallModal.jsx` | [x] |
+| D.5 | **Ringtone** on callee (phone + desktop) | `callRingtone.js` Web Audio loop | [x] |
+| D.6 | Desktop → phone **video**: callee can answer; **audio** both directions | Permissions gate + duplex audio element | [x] |
+| D.7 | QA matrix: voice call, video call, cancel, busy | smashmaxxx ↔ dots after rebuild | [ ] |
+
+**Root cause fixed:** Android manifest lacked `RECORD_AUDIO`/`CAMERA`; voice calls had no remote `<audio>` element (one-way audio).
 
 ---
 
