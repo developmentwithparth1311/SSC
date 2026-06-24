@@ -13,8 +13,10 @@ from core.config import JWT_SECRET
 GOOGLE_CLIENT_ID = (os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
 GOOGLE_CLIENT_SECRET = (os.environ.get("GOOGLE_CLIENT_SECRET") or "").strip()
 GOOGLE_REDIRECT_URI = (os.environ.get("GOOGLE_REDIRECT_URI") or "").strip()
-# Capacitor Android WebView origin (installed app shell — not a browser tab).
-NATIVE_OAUTH_REDIRECT = (os.environ.get("NATIVE_OAUTH_REDIRECT") or "https://localhost").rstrip("/")
+# Android deep-link return (AndroidManifest intent-filter chat.ssc.secure://app/auth).
+# Do NOT use https://localhost here — after OAuth leaves the Capacitor shell, the phone
+# cannot reach localhost and shows ERR_CONNECTION_REFUSED.
+NATIVE_OAUTH_REDIRECT = (os.environ.get("NATIVE_OAUTH_REDIRECT") or "chat.ssc.secure://app").rstrip("/")
 DESKTOP_OAUTH_REDIRECT = (os.environ.get("DESKTOP_OAUTH_REDIRECT") or "chat.ssc.secure.desktop://auth").rstrip("/")
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"

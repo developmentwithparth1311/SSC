@@ -50,9 +50,10 @@ def test_orchestrator_cookie_logout_on_web():
     assert "usesBearerAuth" in text
 
 
-def test_google_native_redirect_uses_capacitor_origin():
+def test_google_native_redirect_uses_android_deep_link_scheme():
     url = frontend_redirect("native", "tok", False)
-    assert url.startswith("https://localhost/auth/google")
+    assert url.startswith("chat.ssc.secure://app/auth/google")
+    assert "https://localhost" not in url
 
 
 def test_google_native_redirect_uses_oauth_code_not_jwt():
@@ -79,6 +80,15 @@ def test_oauth_completion_code_roundtrip():
     token = exchange_oauth_completion_code(code)
     assert token == "session_jwt_xyz"
     assert exchange_oauth_completion_code(code) is None
+
+
+def test_android_manifest_oauth_deep_link_intent():
+    manifest = (REPO / "frontend" / "android" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(
+        encoding="utf-8"
+    )
+    assert 'android:scheme="chat.ssc.secure"' in manifest
+    assert 'android:host="app"' in manifest
+    assert 'android:pathPrefix="/auth"' in manifest
 
 
 def test_capacitor_deep_link_without_full_reload():
