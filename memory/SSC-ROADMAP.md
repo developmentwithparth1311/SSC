@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (contact graph privacy · unified identity · Engine 10 desktop)
+**Updated:** 2026-06-24 (founder two-device QA · OAuth wired · v1.0.4 builds)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -18,7 +18,8 @@
 | **MongoDB** | Atlas `ssc` cluster | Network: allow Cloud Run (0.0.0.0/0) |
 | **Redis** | Upstash (production) | Required for `ENV=production` |
 | **APK API URL** | Cloud Run (baked in build) | `frontend/.env.production.local` |
-| **Google OAuth** | ✅ Configured | Web client + Cloud Run redirect URI in `cloud_run.env` |
+| **Google OAuth** | ✅ Wired (phone + desktop) | Android `chat.ssc.secure://app` · desktop `chat.ssc.secure.desktop://` · Cloud Run `ssc-api-00012-bbc` |
+| **Release builds** | v1.0.4 / build 6 | APK `Desktop\SSC\APK\SSC-app-release.apk` · Win `Desktop\SSC\SSC-Setup-1.0.4.exe` |
 | **LAN dev** | ✅ Docker mongo + redis + local backend | Founder laptop only — never give LAN IP to testers |
 
 ---
@@ -140,15 +141,81 @@ Details: `memory/SECURITY_MODEL.md`
 
 ## Open gaps (honest)
 
-| ID | Item | Priority | Engine |
-|----|------|----------|--------|
-
-| S3 | Native session lost on force-close | Low (accepted) | 5 doc |
-
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| S3 | Native session lost on force-close | **P0** (founder retest) | Engine 5 doc accepted tradeoff — founder expects stay-logged-in unless panic wipe |
+| QA-1 | Founder two-device QA backlog | **P0–P2** | See **Founder QA report** below (24 Jun 2026) |
 | — | iOS libsignal + App Store | Deferred | — |
 
+**Closed:** G6, G9, C8, M4, M5 · HIGH audit (OAuth, deep links, dev/prod guards) · Android + desktop Google OAuth redirect wiring
 
-**Closed:** G6, G9, C8, M4, M5
+---
+
+## Founder QA report — two-device session (24 Jun 2026)
+
+**Devices:** Windows desktop (`smashmaxxx` / `SSC-Setup-1.0.4.exe`) ↔ Android phone (`dots` / APK v1.0.3–1.0.4)  
+**API:** Production Cloud Run · accounts linked via Google OAuth  
+**In progress:** 24h retention — conversation left open to verify server + client TTL deletes message lines
+
+### What worked ✅
+
+| Area | Result |
+|------|--------|
+| Google OAuth | Phone + PC login complete (after `chat.ssc.secure://app` + desktop protocol fix) |
+| Friend request | `smashmaxxx` → `dots` request delivered (visible after app restart on phone) |
+| Cross-device chat | 1:1 thread opens; messages deliver both ways |
+| PC → phone video | Call connects; laptop camera visible on phone |
+| PC → phone voice call | Call initiates (audio one-way / permission issues on phone) |
+| Delete contact | Confirm dialog works (Cancel / Confirm) |
+| Google avatar | Profile photo from Google `picture` URL (no gallery access) |
+| Settings (partial) | Signal identity LISTO, vault ABIERTO, 2FA OFF, panic copy present |
+
+### P0 — Broken or blocking (fix before wider testers)
+
+| # | Issue | Expected behavior |
+|---|--------|-------------------|
+| P0-1 | **Friend request not live** — pending badge / Pending tab empty until force-close + reopen | WebSocket or push updates contacts in real time while app is open |
+| P0-2 | **Session lost on force-close** (phone) — must Google-login again | Stay logged in across kill/restart; logout only explicit or panic wipe |
+| P0-3 | **Android mic + camera permissions** — voice notes, answer/place calls, video calls fail on phone | Runtime permission prompts; calls and voice notes usable |
+| P0-4 | **Calls one-way / no audio** — PC→phone video shows camera; no ringtone on laptop; phone cannot answer; no call audio | Full duplex audio; incoming ring UI + sound both sides |
+| P0-5 | **Desktop voice note** — mic turns red but attachment empty (only RSA timestamp metadata) | Record, upload, play encrypted voice note on peer |
+| P0-6 | **Screenshot / image in chat** — received on PC as flat screenshot, not openable/zoomable/downloadable | Tap to preview, zoom, save (Signal/RSA attachment flow) |
+| P0-7 | **Block + Mute** on PC — no effect | Block hides chat + rejects; mute silences notifications |
+| P0-8 | **Create group** — pick member works (1→2) but **Create** does nothing | Named group created; members synced |
+| P0-9 | **Google OAuth leftover window** (phone) — browser/WebView stays open after sign-in | Auto-close OAuth surface on return to app |
+| P0-10 | **Samsung system back** in chat — rapid back exits to login | Back stack: chat → chat list; no accidental logout |
+
+### P1 — UX / product (VIP polish)
+
+| # | Issue | Target |
+|---|--------|--------|
+| P1-1 | **Legacy / upgrade banners in chat** — “legacy encryption”, “contact has not upgraded”, “E2E channel established — say hello” | Hide from default UI; optional debug/settings only. Peers should negotiate Signal silently |
+| P1-2 | **Why “upgrade”?** — User expects whole app E2E | Copy + behavior: auto bootstrap Signal on installed clients; no yellow scolding in thread |
+| P1-3 | **New chat / group picker** — must type username; should list **accepted contacts** with checkboxes | WhatsApp-style: pick from contacts, optional search |
+| P1-4 | **Group naming** — multiple groups indistinguishable | Require group title (or default “Alice, Bob +2”) |
+| P1-5 | **Non-mutual contact** — search finds user but messaging/calls/files should be blocked | Friendly auto-message: “Request sent — waiting for acceptance” (no plaintext spam) |
+| P1-6 | **Chat header menu (⋮)** — opens behind message bubbles (z-index) | Menu above composer; readable |
+| P1-7 | **Settings pro pass** — desktop shows `Versión 1.0.0` (stale); layout feels cheap | Match build version (1.0.4); tighten sections (Profile / Security / Preferences / About); pro patterns from Signal/WhatsApp |
+| P1-8 | **Vault unlock prompt** after re-login | Only when sending/decrypting; not on every entry |
+| P1-9 | **Email/password on Google-only account** — “invalid credentials” | Clear error: “Use Google sign-in for this account” |
+| P1-10 | **Profile tap** (avatar / name in chat & list) | Optional v2: contact profile sheet (mute, block, safety number) — defer if not MVP |
+
+### P2 — Nice to have
+
+| # | Item |
+|---|------|
+| P2-1 | Incoming call ringtone / vibration on desktop |
+| P2-2 | Chat list: exit chat via Android back without hunting top-left `<` |
+| P2-3 | Onboarding coach copy trim — less floating instructional text in threads |
+
+### Engineering notes (for implementers)
+
+| Topic | Explanation |
+|-------|-------------|
+| **Legacy RSA label** | Engine 8.6 dual-read: messages use `legacy_rsa` until Signal X3DH session exists between **both** installed peers. Not a user “upgrade” — auto `bootstrapSignalIdentity` should clear this without UI noise |
+| **Session after kill** | Native clients store JWT in memory (Engine 5). Force-stop clears it — if founder wants persistence, need secure native storage (Keychain/Keystore) without weakening panic wipe |
+| **Google vs password** | Google accounts have `auth_provider=google`, no `password_hash` — email login correctly fails; UX must say so |
+| **Real-time contacts** | Likely missing WS event handler for `friend-request` / roster refresh on phone while foreground |
 
 ---
 
@@ -175,7 +242,11 @@ cd C:\Users\smash\SSC-main\backend
 - [x] HTTPS production API (Cloud Run)
 - [x] Google OAuth + Cloud Run redirect URI
 - [x] APK bakes Cloud Run URL (`yarn cap:sync` / `SSC-BUILD-APK.bat`)
-- [x] **Redeploy** latest `main` + `CONTACT_GRAPH_PEPPER` in `cloud_run.env` (revision `ssc-api-00005-x8s` · 24 Jun 2026)
+- [x] **Redeploy** production API (revision `ssc-api-00012-bbc` · oauth_code + native/desktop redirects · 24 Jun 2026)
+- [x] HIGH audit batch — oauth_code exchange, deep links, session recovery, dev/prod guards (`241ff6c`)
+- [x] Android OAuth redirect `chat.ssc.secure://app` (fix localhost ERR_CONNECTION_REFUSED · `4501fa7`)
+- [x] Desktop OAuth — protocol register + in-window intercept (`d86a0bd` · `SSC-Setup-1.0.4.exe`)
+- [x] DB wipe + dev `ssc-dev` split; pytest **538 passed**; TTL indexes on dev DB
 - [ ] Custom domain + Turnstile (~28 Jun)
 - [x] Sync PRD (`memory/PRD.md` — 24 Jun 2026, incl. deploy checklist)
 - [x] Automated smoke: `e2e_smoke.py` + Engine 1–5/8/9 gates + production `/api/health` (24 Jun 2026)
@@ -183,9 +254,12 @@ cd C:\Users\smash\SSC-main\backend
 - [x] First-run onboarding coach (3 steps)
 - [x] In-app UI/UX pass — avatars, pro Settings, ConfirmDialog, smart scroll, file upload gates, mobile message search, i18n es/ro (24 Jun 2026)
 - [x] `reset_tester_accounts.py` — purge `e2e*`, `testfriend`, `@ssc.dev` (preserve `raul1988`)
-- [x] Rebuild APK + Windows installer (24 Jun 2026 · revision `ssc-api-00006-qsf`)
-- [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual — APK on device)
+- [x] Rebuild APK v1.0.4 (build 6) + Windows `SSC-Setup-1.0.4.exe` (24 Jun 2026)
+- [x] Founder two-device smoke **started** — smashmaxxx ↔ dots: chat ✅ · requests (delayed) ✅ · calls partial ⚠️
+- [ ] **P0 QA backlog** — see Founder QA report (permissions, real-time contacts, session persist, calls, attachments, block/mute, groups)
+- [ ] Two-phone smoke: Signal **without** legacy banners + working mic/camera + on-device translate
 - [ ] TURN verification on cellular/Wi‑Fi mix (founder manual — same session as two-phone)
+- [ ] **Retention proof** — founder watching 24h timer on active smashmaxxx ↔ dots thread (in progress)
 
 ### P1 — Product / security
 - [x] Engine 8.9: Signal attachments (1:1 Android)
@@ -217,8 +291,8 @@ cd C:\Users\smash\SSC-main\backend
 
 | Metric | Value |
 |--------|-------|
-| pytest collected | **529** |
-| pytest result | **528 passed**, 1 skipped, 0 failed |
+| pytest collected | **538+** |
+| pytest result | **538 passed**, 1 skipped, 0 failed (24 Jun 2026 · local `ssc-dev` + backend on :8000) |
 | Engine 1–5 gates | **PASS** |
 | Engine 8 gate | **PASS** (54 unit + 10 integration + proof through 8.12) |
 | Engine 9 gate | **PASS** |
@@ -269,3 +343,7 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | UX gaps — Settings Security + 2FA, onboarding coach, PRD sync, Engine 3 proof fix |
 | 2026-06-24 | In-app UI/UX pass — Avatar, Settings profile/avatar, ConfirmDialog, scroll/upload/call wiring, es/ro i18n |
 | 2026-06-24 | Cloud Run redeploy `ssc-api-00006-qsf` + APK + Windows installer rebuilt for Firebase distribution |
+| 2026-06-24 | HIGH audit fixes — oauth_code, deep links, dev/prod guards; DB wipe; `241ff6c` |
+| 2026-06-24 | Android OAuth — `chat.ssc.secure://app` replaces broken `https://localhost` redirect · APK v1.0.4 |
+| 2026-06-24 | Desktop OAuth — Electron protocol + navigation intercept · `SSC-Setup-1.0.4.exe` |
+| 2026-06-24 | Founder QA — smashmaxxx ↔ dots two-device session documented (P0–P2 backlog in roadmap) |
