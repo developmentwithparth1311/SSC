@@ -105,7 +105,7 @@ See `memory/SSC-ROADMAP.md` for gate status and remaining work.
 - **SFU** for group calls >6 (mediasoup / LiveKit)
 - **iOS Capacitor** ($99/yr + Mac)
 - **Engine 6** — own-metal Mongo / push hardening (post-investors)
-- **Frontend automated tests** — in progress
+- **Frontend automated tests** — 13 tests via `yarn test:ci` (expand coverage over time)
 
 ## Test health (2026-06-24)
 

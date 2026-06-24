@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (roadmap cleanup · invite links retired · 2FA backups confirmed)
+**Updated:** 2026-06-24 (PRD synced · invite links removed · frontend tests added)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -184,7 +184,7 @@ cd C:\Users\smash\SSC-main\backend
 - [ ] iOS Capacitor ($99/yr)
 - [x] 2FA backup codes (10 codes on setup, login fallback, regenerate in UI)
 - [x] Invite links — **retired** (username search + friend requests sufficient)
-- [ ] Frontend automated tests (0 today)
+- [x] Frontend automated tests (`yarn test:ci` — 13 tests, 4 suites)
 - [x] Remove dead shadcn `components/ui` scaffold
 
 ---
@@ -200,7 +200,7 @@ cd C:\Users\smash\SSC-main\backend
 | Engine 9 gate | **PASS** |
 | `e2e_smoke.py` | **PASS** (health, contacts, messages, files, statuses, panic wipe) |
 | Production `/api/health` | **PASS** (`env=production`, mongo + redis ok) |
-| Frontend tests | 0 |
+| Frontend tests | **13 passed** (`yarn test:ci` — i18n, presence, footprint, Landing) |
 
 ---
 
@@ -225,3 +225,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | Roadmap cleanup: Engine 7 removed, 2FA backups marked done, invite links retired |
 | 2026-06-24 | Invite links removed from codebase (username search + friend requests only) |
 | 2026-06-24 | PRD synced to current architecture (Signal Android, Engine 9, production deploy) |
+| 2026-06-24 | Frontend automated tests — 13 tests (i18n, presence, session footprint, Landing) |
