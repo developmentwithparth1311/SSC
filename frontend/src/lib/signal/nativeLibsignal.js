@@ -1,26 +1,35 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { isElectronApp } from '../platform';
 import { LIBSIGNAL_PINNED_VERSION } from './constants';
 
 const SscLibsignal = registerPlugin('SscLibsignal', {
   web: () => import('./nativeLibsignalWeb').then((m) => new m.SscLibsignalWeb()),
 });
 
+function getLibsignalClient() {
+  if (Capacitor.isNativePlatform()) return SscLibsignal;
+  if (isElectronApp() && window.sscDesktop?.libsignal) return window.sscDesktop.libsignal;
+  return null;
+}
+
 export function isNativeLibsignalAvailable() {
-  return Capacitor.isNativePlatform();
+  return !!getLibsignalClient();
 }
 
 export async function getPinnedLibsignalVersion() {
-  if (!isNativeLibsignalAvailable()) {
-    return { version: LIBSIGNAL_PINNED_VERSION, source: 'policy-only-web' };
+  const client = getLibsignalClient();
+  if (!client) {
+    return { version: LIBSIGNAL_PINNED_VERSION, source: 'policy-only-browser-dev' };
   }
-  return SscLibsignal.getPinnedVersion();
+  return client.getPinnedVersion();
 }
 
 export async function generatePreKeyBundle() {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Signal prekeys require the SSC Android app (libsignal native)');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Signal prekeys require an installed SSC app (Android, iOS, or desktop)');
   }
-  const bundle = await SscLibsignal.generatePreKeyBundle();
+  const bundle = await client.generatePreKeyBundle();
   if (bundle?.libsignal_version && bundle.libsignal_version !== LIBSIGNAL_PINNED_VERSION) {
     throw new Error(`Unexpected libsignal version: ${bundle.libsignal_version}`);
   }
@@ -28,17 +37,19 @@ export async function generatePreKeyBundle() {
 }
 
 export async function hasSignalSession(peerUserId) {
-  if (!isNativeLibsignalAvailable()) {
-    return { has_session: false, skipped: true, reason: 'web' };
+  const client = getLibsignalClient();
+  if (!client) {
+    return { has_session: false, skipped: true, reason: 'browser-dev' };
   }
-  return SscLibsignal.hasSession({ peer_user_id: peerUserId });
+  return client.hasSession({ peer_user_id: peerUserId });
 }
 
 export async function establishSignalSession(peerUserId, bundle, ourUserId) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Signal sessions require the SSC Android app (libsignal native)');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Signal sessions require an installed SSC app (Android, iOS, or desktop)');
   }
-  return SscLibsignal.establishSession({
+  return client.establishSession({
     peer_user_id: peerUserId,
     our_user_id: ourUserId,
     bundle,
@@ -46,10 +57,11 @@ export async function establishSignalSession(peerUserId, bundle, ourUserId) {
 }
 
 export async function encryptSignalMessage(peerUserId, ourUserId, plaintext) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Signal encrypt requires the SSC Android app (libsignal native)');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Signal encrypt requires an installed SSC app (Android, iOS, or desktop)');
   }
-  return SscLibsignal.encryptSignalMessage({
+  return client.encryptSignalMessage({
     peer_user_id: peerUserId,
     our_user_id: ourUserId,
     plaintext,
@@ -57,10 +69,11 @@ export async function encryptSignalMessage(peerUserId, ourUserId, plaintext) {
 }
 
 export async function decryptSignalMessage(peerUserId, ourUserId, ciphertext, signalMessageType) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Signal decrypt requires the SSC Android app (libsignal native)');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Signal decrypt requires an installed SSC app (Android, iOS, or desktop)');
   }
-  return SscLibsignal.decryptSignalMessage({
+  return client.decryptSignalMessage({
     peer_user_id: peerUserId,
     our_user_id: ourUserId,
     ciphertext,
@@ -69,40 +82,44 @@ export async function decryptSignalMessage(peerUserId, ourUserId, ciphertext, si
 }
 
 export async function createGroupSenderKeyDistribution(ourUserId, distributionId) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Group sender keys require the SSC Android app');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Group sender keys require an installed SSC app');
   }
-  return SscLibsignal.createGroupSenderKeyDistribution({
+  return client.createGroupSenderKeyDistribution({
     our_user_id: ourUserId,
     distribution_id: distributionId,
   });
 }
 
 export async function processGroupSenderKeyDistribution(senderUserId, skdm) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Group sender keys require the SSC Android app');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Group sender keys require an installed SSC app');
   }
-  return SscLibsignal.processGroupSenderKeyDistribution({
+  return client.processGroupSenderKeyDistribution({
     sender_user_id: senderUserId,
     skdm,
   });
 }
 
 export async function hasGroupSenderKey(senderUserId, distributionId) {
-  if (!isNativeLibsignalAvailable()) {
-    return { has_sender_key: false, skipped: true, reason: 'web' };
+  const client = getLibsignalClient();
+  if (!client) {
+    return { has_sender_key: false, skipped: true, reason: 'browser-dev' };
   }
-  return SscLibsignal.hasGroupSenderKey({
+  return client.hasGroupSenderKey({
     sender_user_id: senderUserId,
     distribution_id: distributionId,
   });
 }
 
 export async function encryptGroupMessage(ourUserId, distributionId, plaintext) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Group encrypt requires the SSC Android app');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Group encrypt requires an installed SSC app');
   }
-  return SscLibsignal.encryptGroupMessage({
+  return client.encryptGroupMessage({
     our_user_id: ourUserId,
     distribution_id: distributionId,
     plaintext,
@@ -110,10 +127,11 @@ export async function encryptGroupMessage(ourUserId, distributionId, plaintext) 
 }
 
 export async function decryptGroupMessage(senderUserId, ciphertext) {
-  if (!isNativeLibsignalAvailable()) {
-    throw new Error('Group decrypt requires the SSC Android app');
+  const client = getLibsignalClient();
+  if (!client) {
+    throw new Error('Group decrypt requires an installed SSC app');
   }
-  return SscLibsignal.decryptGroupMessage({
+  return client.decryptGroupMessage({
     sender_user_id: senderUserId,
     ciphertext,
   });

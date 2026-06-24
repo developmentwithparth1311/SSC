@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict
 
-MESH_MAX_PARTICIPANTS = 6
+MESH_MAX_PARTICIPANTS = 8
 SELECTED_SFU_STACK = "mediasoup"
 
 

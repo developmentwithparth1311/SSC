@@ -11,7 +11,7 @@
 | Mode | Limit | Implementation |
 |------|-------|----------------|
 | **1:1 calls** | 2 peers | WebRTC P2P + STUN/TURN |
-| **Group calls** | ~6 participants | Full-mesh WebRTC in `GroupCallModal.jsx` |
+| **Group calls** | up to **8** participants (mesh) | Full-mesh WebRTC in `GroupCallModal.jsx` |
 
 Full-mesh means each participant opens N−1 peer connections — workable to ~6, unstable beyond that (CPU, bandwidth, signaling fan-out).
 
@@ -21,8 +21,8 @@ Full-mesh means each participant opens N−1 peer connections — workable to ~6
 
 | Participants | Mode | Notes |
 |--------------|------|-------|
-| 2–6 | **mesh** (current) | No server media; keep working path |
-| 7+ | **SFU** | Single upstream per client; server forwards streams |
+| 2–8 | **mesh** (current) | No server media; mobile-first cap |
+| 9+ | **SFU** | Single upstream per client; server forwards streams (deploy ~28 Jun) |
 
 ---
 
@@ -53,7 +53,7 @@ Full-mesh means each participant opens N−1 peer connections — workable to ~6
 ```json
 "group_calls": {
   "mode": "mesh",
-  "max_mesh_participants": 6,
+  "max_mesh_participants": 8,
   "sfu_enabled": false,
   "sfu_url": null
 }

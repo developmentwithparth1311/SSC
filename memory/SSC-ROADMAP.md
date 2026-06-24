@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (PRD synced · invite links removed · frontend tests added)
+**Updated:** 2026-06-24 (installed-clients-only · Engine 10 desktop · group cap 8)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -28,6 +28,7 @@
 ```
 Engines 1–5 + 8 + 9  ✅ COMPLETE (gates pass)
 Engine 6             ✅ EVALUATION (6.1–6.2 done · 6.3 deferred post-investors)
+Engine 10            ✅ DESKTOP (Windows installer · Mac dmg config · libsignal)
 ```
 
 ### Engine 1 — Retention ✅
@@ -58,9 +59,18 @@ Engine 6             ✅ EVALUATION (6.1–6.2 done · 6.3 deferred post-investo
 - [x] 8.11 **Group Sender Keys** `signal_group_v1` (Android — SKDM fan-out + type 7)
 - [x] 8.13 Group **call signaling** encrypted via Sender Keys
 - [x] 8.12 **Stories** `signal_status_v1` (Sender Keys + contact SKDM fan-out)
-- [ ] 8.10 Signal on **Web** — **blocked** (official `@signalapp/libsignal-client` is Node-native only; no browser WASM)
+- [x] 8.10 Signal on **Web** — **retired** (no browser WASM; desktop libsignal = Engine 10)
 
 **Charter:** `memory/SIGNAL_PROTOCOL_CHARTER.md`
+
+### Engine 10 — Desktop clients ✅
+- [x] 10.1 Desktop charter + policy (`memory/DESKTOP_CLIENT_CHARTER.md`)
+- [x] 10.2 Electron + libsignal Node bridge (IPC parity with Android plugin)
+- [x] 10.3 Windows installer (`SSC-BUILD-DESKTOP-WIN.bat` → NSIS `.exe`)
+- [x] 10.4 Mac build config (`yarn desktop:build:mac` on macOS)
+- [x] 10.5 Engine 10 gate + platform wiring
+
+**Charter:** `memory/DESKTOP_CLIENT_CHARTER.md`
 
 ### Engine 6 — Push / own-metal ✅ (evaluation)
 - [x] 6.1 Push path evaluation — keep FCM + VAPID; self-host deferred
@@ -83,23 +93,21 @@ Engine 6             ✅ EVALUATION (6.1–6.2 done · 6.3 deferred post-investo
 
 **Answer:** Yes, that is the **target**. Engine 8 v1 deliberately shipped **incrementally** so nothing broke. Current truth:
 
-| Surface | Android APK | Web/PWA | Target phase |
-|---------|-------------|---------|--------------|
-| 1:1 text | ✅ `signal_v1` | Legacy RSA | 8.5 ✅ / Web → Engine 8+ |
-| 1:1 call signaling | ✅ encrypted | Legacy cleartext | 8.7 ✅ / Web → 8+ |
-| 1:1 attachments | ✅ `signal_v1` | Legacy RSA | 8.9 ✅ / Web → 8.10 blocked |
-| Group messages | ✅ `signal_group_v1` | Legacy RSA | 8.11 ✅ / Web → 8.10 |
-| Group call signaling | ✅ encrypted (Sender Keys) | Cleartext | 8.13 ✅ / Web → legacy |
-| Stories / statuses | ✅ `signal_status_v1` | Legacy RSA | 8.12 ✅ / Web → legacy |
-| Account unlock | RSA vault (PBKDF2) | Same | Keep (orthogonal to ratchet) |
+| Surface | Android | Windows/Mac desktop | Browser (dev only) |
+|---------|---------|---------------------|-------------------|
+| 1:1 text | ✅ `signal_v1` | ✅ `signal_v1` | Legacy RSA (not product) |
+| 1:1 call signaling | ✅ encrypted | ✅ encrypted | Legacy |
+| 1:1 attachments | ✅ `signal_v1` | ✅ `signal_v1` | Legacy RSA |
+| Group messages | ✅ `signal_group_v1` | ✅ `signal_group_v1` | Legacy RSA |
+| Group call signaling | ✅ encrypted | ✅ encrypted | Legacy |
+| Stories / statuses | ✅ `signal_status_v1` | ✅ `signal_status_v1` | Legacy RSA |
+| Account unlock | RSA vault (PBKDF2) | Same | Same |
 
-**Next crypto phases (in order):**
-1. [x] Signal **attachments** (1:1, Android) — 8.9
-2. [x] **Group Sender Keys** — 8.11
-3. [x] Group **call signaling** encryption — 8.13
-4. [x] **Stories** Signal encryption — 8.12
-5. [ ] Signal on **Web** — 8.10 (blocked until Signal ships browser bindings)
-6. [ ] Unified identity (retire dual RSA + Curve25519 registration story)
+**Product surfaces:** Android APK · Windows `.exe` · Mac `.dmg` (build on Mac) · iOS deferred.
+
+**Next crypto / identity (P1):**
+1. [ ] **Unified identity** — libsignal curve primary; reset 3 tester accounts OK
+2. [ ] **Contacts graph privacy** — server must not see who is friends with whom
 
 Details: `memory/SECURITY_MODEL.md`
 
@@ -111,16 +119,19 @@ Details: `memory/SECURITY_MODEL.md`
 |---------|--------|
 | 1:1 + group chat | ✅ |
 | E2E files (RSA envelope) | ✅ |
-| Voice/video 1:1 + group (~6 mesh) | ✅ |
+| Voice/video 1:1 + group (mesh up to **8**) | ✅ |
 | Stories 24h | ✅ |
 | Contacts + friend requests | ✅ |
 | 2FA TOTP + backup codes | ✅ |
 | Panic wipe (keeps account + friends) | ✅ |
 | Push FCM + Web VAPID | ✅ |
-| PWA + Capacitor Android APK | ✅ |
+| Capacitor Android APK | ✅ |
+| Windows desktop (Electron + libsignal) | ✅ |
+| Mac desktop (`.dmg` on macOS) | ✅ config · build on Mac |
+| Web / PWA in browser | ⬜ **Not a product** — dev/landing only (RSA) |
 | Google OAuth (web + native) | ✅ configured |
 | Translation | ✅ On-device (Android ML Kit); server off by default |
-| iOS app | ✅ Scaffolded (`frontend/ios/`) · build requires Mac + $99/yr |
+| iOS app | ⬜ Deferred · scaffold exists (`frontend/ios/`) |
 | Custom domain + Turnstile | ⬜ ~28 Jun 2026 |
 | Play Store public | ⬜ Listing (AGPL review ✅) |
 | TURN self-host (off-LAN calls) | ⬜ Credentials exist; verify on phone |
@@ -131,10 +142,10 @@ Details: `memory/SECURITY_MODEL.md`
 
 | ID | Item | Priority | Engine |
 |----|------|----------|--------|
-| M4 | Contacts graph server metadata | Accepted tradeoff | — |
-| S3 | Native session lost on force-close | Medium | 5 doc |
-| — | Signal on Web | High | 8.10 (blocked — no official WASM) |
-| — | Unified identity (RSA + Curve25519) | Medium | 8+ |
+| M4 | Contacts graph server metadata | **High — fix** (staff-blind graph) | 11+ |
+| S3 | Native session lost on force-close | Low (accepted) | 5 doc |
+| — | Unified identity (RSA + Curve25519) | **High** | P1 |
+| — | iOS libsignal + App Store | Deferred | — |
 
 
 **Closed:** G6, G9, C8, M5
@@ -175,10 +186,13 @@ cd C:\Users\smash\SSC-main\backend
 - [x] Engine 8.11: Group Sender Keys
 - [x] Engine 8.12: Stories Signal encryption
 - [x] Engine 8.13: Group call signaling encryption
-- [ ] Engine 8.10: Signal on Web (blocked — official lib is Node-native)
+- [x] Engine 8.10: Signal on Web — **retired** (Engine 10 desktop instead)
 - [x] Engine 9: on-device translation (M5)
-- [ ] Unified identity (retire dual RSA + Curve25519)
+- [x] Engine 10: Windows + Mac desktop (`memory/DESKTOP_CLIENT_CHARTER.md`)
+- [ ] Unified identity (libsignal curve primary · 3 testers)
+- [ ] Contacts graph privacy (server-blind friend graph)
 - [x] AGPL legal review (`memory/AGPL_COMPLIANCE.md`, `LICENSE`, in-app source offer)
+- [x] Group video cap **8** (mesh; SFU for 9+ deferred to domain ~28 Jun)
 
 ### P2 — Scale & polish
 - [x] Engine 6 evaluation (push + own-metal — charter + gate; migration deferred)
@@ -204,8 +218,9 @@ cd C:\Users\smash\SSC-main\backend
 | `e2e_smoke.py` | **PASS** (health, contacts, messages, files, statuses, panic wipe) |
 | Production `/api/health` | **PASS** (`env=production`, mongo + redis ok) |
 | WS fan-out | Redis pub-sub when `REDIS_URL` set · `ws_fanout` in `/api/health` |
-| Frontend tests | **20 passed** (`yarn test:ci` — includes openSourceLicenses) |
+| Frontend tests | **22 passed** (`yarn test:ci` — platform + groupCalls cap 8) |
 | AGPL gate | **PASS** (`run_agpl_gate.py`) |
+| Engine 10 gate | **PASS** (`run_engine10_gate.py`) |
 
 ---
 
@@ -236,3 +251,6 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | SFU Phase A — mediasoup selected; config + mesh cap; deploy deferred |
 | 2026-06-24 | iOS Capacitor scaffold — `frontend/ios/` + IOS_CAPACITOR_CHARTER.md |
 | 2026-06-24 | AGPL legal review — LICENSE, THIRD_PARTY_NOTICES, compliance doc, in-app source offer, gate |
+| 2026-06-24 | Installed-clients-only product strategy — Web/PWA retired as product surface |
+| 2026-06-24 | Engine 10 — Electron desktop + libsignal (Windows NSIS · Mac dmg config) |
+| 2026-06-24 | Group video mesh cap raised to **8**; contacts privacy + unified identity locked P1 |

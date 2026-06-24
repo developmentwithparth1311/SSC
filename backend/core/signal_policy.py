@@ -150,11 +150,13 @@ ENGINE8_V1_SCOPE: Tuple[str, ...] = (
 )
 
 ENGINE8_DEFERRED: Tuple[str, ...] = (
-    "signal_web_wasm",
     "multi_device_sync",
     "sealed_sender",
     "post_quantum_pqxdh",
 )
+
+# 8.10 browser WASM — retired; desktop libsignal is Engine 10 (see engine10_policy.py).
+ENGINE8_10_RETIRED = True
 
 
 def engine8_prerequisites_met() -> bool:

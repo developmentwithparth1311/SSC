@@ -1,0 +1,22 @@
+import { isElectronApp, isInstalledClient, isNativeApp } from '../platform';
+
+describe('platform', () => {
+  const original = window.sscDesktop;
+
+  afterEach(() => {
+    window.sscDesktop = original;
+  });
+
+  it('detects Electron desktop shell', () => {
+    window.sscDesktop = { isDesktop: true, platform: 'win32' };
+    expect(isElectronApp()).toBe(true);
+    expect(isInstalledClient()).toBe(true);
+  });
+
+  it('browser dev shell is not an installed client', () => {
+    window.sscDesktop = undefined;
+    expect(isElectronApp()).toBe(false);
+    expect(isNativeApp()).toBe(false);
+    expect(isInstalledClient()).toBe(false);
+  });
+});

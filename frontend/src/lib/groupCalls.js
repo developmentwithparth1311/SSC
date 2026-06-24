@@ -2,7 +2,7 @@ import { getBackendUrl } from './platform';
 
 const DEFAULT_POLICY = {
   mode: 'mesh',
-  max_mesh_participants: 6,
+  max_mesh_participants: 8,
   sfu_enabled: false,
   sfu_url: null,
 };

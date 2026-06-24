@@ -1,0 +1,57 @@
+{
+  "name": "ssc-desktop",
+  "version": "1.0.0",
+  "description": "SSC desktop client — Windows + Mac with libsignal",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.mjs",
+  "author": "SSC contributors",
+  "license": "AGPL-3.0",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:mac": "electron-builder --mac dmg",
+    "build:all": "electron-builder --win nsis --mac dmg"
+  },
+  "dependencies": {
+    "@signalapp/libsignal-client": "0.96.2"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "chat.ssc.secure.desktop",
+    "productName": "SSC",
+    "copyright": "Copyright © 2026 SSC contributors",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../build",
+        "to": "renderer",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "SSC-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.social-networking",
+      "artifactName": "SSC-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

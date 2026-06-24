@@ -1,13 +1,13 @@
 import { WebPlugin } from '@capacitor/core';
 
-/** Web/PWA — prekey upload deferred until native or WASM bridge (8.4+). */
+/** Browser dev shell only — not a product surface (use installed SSC app). */
 export class SscLibsignalWeb extends WebPlugin {
   async getPinnedVersion() {
-    return { version: '0.96.2', source: 'web-unavailable' };
+    return { version: '0.96.2', source: 'browser-dev-unavailable' };
   }
 
   async generatePreKeyBundle() {
-    throw new Error('Signal prekeys require the SSC Android app');
+    throw new Error('Signal prekeys require an installed SSC app (Android, iOS, or desktop)');
   }
 
   async hasSession() {

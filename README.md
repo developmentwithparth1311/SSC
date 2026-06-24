@@ -53,6 +53,16 @@ APK: `frontend/android/app/build/outputs/apk/debug/app-debug.apk`
 
 Phones must reach the backend on port **8000** (firewall: allow inbound on private network).
 
+### 5. Windows desktop (production API + libsignal)
+
+```powershell
+.\SSC-BUILD-DESKTOP-WIN.bat
+```
+
+Installer: `frontend/desktop/dist/SSC-Setup-1.0.0.exe`
+
+Mac `.dmg`: run `SSC-BUILD-DESKTOP-MAC.sh` on macOS (see `memory/DESKTOP_CLIENT_CHARTER.md`).
+
 ## Project structure
 
 ```

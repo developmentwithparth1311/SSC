@@ -92,7 +92,8 @@ Only these sources may be used for Signal Protocol implementation.
 | Platform | Approved path |
 |----------|---------------|
 | **Android APK (Capacitor)** | Custom Capacitor plugin → `libsignal-android` AAR from Signal Maven |
-| **Web / PWA** | `@signalapp/libsignal-client` (evaluate WASM/bridge in step 8.3) |
+| **Web / PWA** | ❌ **Not a product surface** — browser WASM retired (Engine 8.10); use Engine 10 desktop |
+| **Windows / Mac desktop** | `@signalapp/libsignal-client` via Electron (Engine 10) |
 | **Backend** | **No libsignal on server** — store public prekey bundles only |
 
 ### 4.4 License (AGPL-3.0)

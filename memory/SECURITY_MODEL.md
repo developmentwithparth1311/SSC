@@ -1,6 +1,6 @@
 # SSC Security Model
 
-**Version:** 1.0 · **Updated:** 2026-06-23  
+**Version:** 1.1 · **Updated:** 2026-06-24
 **Audience:** Founder, testers, investors  
 **Companion:** `memory/SSC-ROADMAP.md`
 
@@ -51,27 +51,28 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 | Call media (audio/video) | ✅ P2P WebRTC | Encrypted by DTLS-SRTP between peers |
 | Translation | ✅ On-device | Google ML Kit — plaintext never leaves phone |
 
-### Web / PWA
+### Windows / Mac desktop (Engine 10)
 
 | Surface | Encrypted? | Protocol |
 |---------|------------|----------|
-| All messaging | ✅ E2E | `legacy_rsa` only — **no libsignal on web** |
+| Same as Android APK | ✅ libsignal | `signal_v1` / `signal_group_v1` / `signal_status_v1` |
+
+### Browser dev shell (not a product)
+
+| Surface | Encrypted? | Protocol |
+|---------|------------|----------|
+| All messaging | ✅ E2E | `legacy_rsa` only — **no libsignal in browser tab** |
 | Call signaling | ⚠️ Cleartext on server relay | Legacy |
-| Translation | ❌ Off by default | Server path only if explicitly enabled (dev) |
 
 ---
 
 ## 4. Should the whole app use Signal?
 
-**Yes — that is the product goal.** Engine 8 shipped the **foundation and the hardest path** (official libsignal, prekey relay, X3DH, ratchet, dual-read, encrypted 1:1 call setup) without locking out existing users.
+**Yes — on every installed client.** Android, Windows, and Mac use official libsignal **0.96.2**. Browser-tab Web/PWA is **not a product surface** (RSA legacy for founder dev only). Engine 8.10 browser WASM is **retired**; Engine 10 desktop replaces it.
 
-**Not yet on Signal (planned):**
+**P1 remaining:** unified identity (curve primary) · contacts graph privacy (server-blind).
 
-1. Web/PWA clients (official libsignal is Node-native — no browser WASM yet)  
-2. Group call signaling encryption  
-3. Web/PWA clients (no official browser libsignal bindings)
-
-**Will stay RSA-based:** Account vault unlock (password → private key). That is identity/key-wrapping, not message transport — same pattern Signal uses for local PIN/biometric protection.
+**Will stay RSA-based:** Account vault unlock (password → private key). Orthogonal to ratchet transport.
 
 ---
 
@@ -83,7 +84,7 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 | `legacy_rsa` messages | Ciphertext + IV + per-user wrapped keys |
 | 1:1 call signaling (upgraded) | Opaque `signaling_ciphertext` only |
 | Group call signaling | SDP + ICE (cleartext) |
-| Contacts | Who is friends with whom (persistent) |
+| Contacts | Who is friends with whom (persistent) — **P1: make server-blind** |
 | Push | Generic body; routing metadata (tokens, conversation_id) |
 | Translation (Android APK) | **On-device only** (ML Kit) — decrypted text never sent to server |
 | Translation (web, dev only) | **Plaintext** if `TRANSLATION_ENABLED=true` — off in production |
@@ -94,17 +95,17 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 
 | Capability | SSC (today) | Signal / WhatsApp |
 |------------|-------------|-------------------|
-| 1:1 text ratchet (Android) | ✅ Same class (libsignal) | ✅ |
-| 1:1 text (web) | Legacy RSA | Full protocol |
-| Groups | RSA wrap, not Sender Keys | Sender Keys |
-| Attachments in protocol | RSA envelope | In-protocol |
+| 1:1 text ratchet (installed clients) | ✅ libsignal | ✅ |
+| 1:1 text (browser dev) | Legacy RSA | Full protocol |
+| Groups (installed clients) | ✅ Sender Keys | Sender Keys |
+| Attachments (installed clients) | ✅ In-protocol | In-protocol |
 | Sealed sender | ❌ | Signal ✅ |
 | Multi-device | ❌ | ✅ |
 | Default server deletion | 24h TTL (strong default) | Optional disappearing |
 | Published audit | ❌ | Years of scrutiny |
 | Global HTTPS prod | ✅ Cloud Run | ✅ |
 
-**Marketing rule:** Say **"Signal-grade 1:1 chat on the Android app"** — not "entire app is Signal" until phases in roadmap are done.
+**Marketing rule:** Say **"Signal-grade E2E on installed apps (Android, Windows, Mac)"** — do not claim browser-tab chat is Signal-grade.
 
 ---
 

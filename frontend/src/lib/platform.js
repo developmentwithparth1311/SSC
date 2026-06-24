@@ -1,8 +1,18 @@
 /**
- * Platform detection — web PWA vs Capacitor native shell.
- * Web behavior is unchanged when not running inside Capacitor.
+ * Platform detection — installed clients (Capacitor + Electron) vs browser dev shell.
  */
 let _capacitor = null;
+
+/** True when running inside SSC Electron (Windows / Mac desktop). */
+export function isElectronApp() {
+  if (typeof window === 'undefined') return false;
+  return !!window.sscDesktop?.isDesktop;
+}
+
+/** Android APK, iOS shell, or desktop installer — not a browser-tab product surface. */
+export function isInstalledClient() {
+  return isNativeApp() || isElectronApp();
+}
 
 function getCapacitor() {
   if (_capacitor !== null) return _capacitor;

@@ -3,15 +3,15 @@
  * Web (5.3): HttpOnly cookie only — never localStorage.
  * Native (5.4): in-memory only — never localStorage; re-login after app kill.
  */
-import { isNativeApp } from './platform';
+import { isInstalledClient } from './platform';
 
 import { LEGACY_JWT_KEY } from './sessionConstants';
 
 let nativeMemoryToken = null;
 
-/** Web PWA uses cookie auth; Capacitor uses in-memory Bearer token. */
+/** Browser dev shell uses cookie auth; installed clients use in-memory Bearer token. */
 export function usesCookieAuth() {
-  return !isNativeApp();
+  return !isInstalledClient();
 }
 
 /** Purge legacy JWT from localStorage (pre-5.3 web / pre-5.4 native installs). */
