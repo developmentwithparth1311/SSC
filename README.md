@@ -63,6 +63,15 @@ Installer: `frontend/desktop/dist/SSC-Setup-1.0.0.exe`
 
 Mac `.dmg`: run `SSC-BUILD-DESKTOP-MAC.sh` on macOS (see `memory/DESKTOP_CLIENT_CHARTER.md`).
 
+## Project location (fixed — do not move)
+
+| Role | Path |
+|------|------|
+| **Code repo** | `C:\Users\smash\SSC-main` |
+| **Desktop shortcuts + Firebase APK folder** | `C:\Users\smash\Desktop\SSC` |
+
+See `memory/PROJECT_LOCATION.md` for the full policy. The repo is not duplicated on the Desktop — only launchers and upload copies live there.
+
 ## Project structure
 
 ```
