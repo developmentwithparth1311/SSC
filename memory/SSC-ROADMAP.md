@@ -162,7 +162,7 @@ cd C:\Users\smash\SSC-main\backend
 - [x] Google OAuth + Cloud Run redirect URI
 - [x] APK bakes Cloud Run URL (`yarn cap:sync` / `SSC-BUILD-APK.bat`)
 - [ ] Custom domain + Turnstile (~28 Jun)
-- [ ] Sync PRD intro text (still says RSA-only — see `memory/PRD.md` header note)
+- [x] Sync PRD intro text (`memory/PRD.md` updated 24 Jun 2026)
 - [x] Automated smoke: `e2e_smoke.py` + Engine 1–5/8/9 gates + production `/api/health` (24 Jun 2026)
 - [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual — APK on device)
 - [ ] TURN verification on cellular/Wi‑Fi mix (founder manual — same session as two-phone)
@@ -224,3 +224,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | All Engine 1–5/8/9 gates pass; pytest 476/476 (1 skipped) |
 | 2026-06-24 | Roadmap cleanup: Engine 7 removed, 2FA backups marked done, invite links retired |
 | 2026-06-24 | Invite links removed from codebase (username search + friend requests only) |
+| 2026-06-24 | PRD synced to current architecture (Signal Android, Engine 9, production deploy) |

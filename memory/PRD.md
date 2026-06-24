@@ -2,109 +2,149 @@
 
 > **Roadmap (single source of truth):** `memory/SSC-ROADMAP.md`  
 > **Security model:** `memory/SECURITY_MODEL.md`  
-> **Note (Jun 2026):** Engine 8 added Signal Protocol on Android (1:1 text + 1:1 call signaling). Web/groups/attachments still use legacy RSA — see security model. Sections below include original MVP history; defer list at bottom is partly outdated.
+> **Updated:** 2026-06-24
+
+## Product summary
+
+SSC is a hybrid full-stack E2E-encrypted ephemeral messaging app (WhatsApp/Telegram-style). Chats, files, calls, and stories auto-delete after 24h. Contacts are added via **username search + mutual friend requests** (invite links retired).
+
+**Platforms:** PWA (web) + Capacitor Android APK. Production API on Cloud Run HTTPS.
 
 ## Original problem statement
+
 Build a WhatsApp/Telegram-like app with:
+
 - 24h auto-recycle of chats, calls, files
 - Built-in auto-translation
-- Strong encryption (E2E, "double/triple")
+- Strong E2E encryption
 - Voice, video calls, file send/receive
-- Panic wipe/log-out
+- Panic wipe/log-out (keeps account + friends)
 - Login: email+password OR Google (no phone number)
 - Recovery via email+password only
 - Username creation rules (4–12, no abuse, no SSC, no admin, no emoji)
 - Anti-phishing, anti-bot, anti-spam
-- Works on any device (PWA)
+- Works on any device (PWA + native APK)
 
-## Architecture
-- **Backend**: FastAPI + MongoDB (TTL indexes for 24h auto-delete)
-- **Realtime**: WebSocket (`/api/ws`) for messages, typing, read receipts, WebRTC signaling
-- **E2E encryption**: Legacy RSA-OAEP 2048 + AES-256-GCM (web, groups, attachments, migration). **Android 1:1 text:** Signal Protocol `signal_v1` (libsignal 0.96.2, X3DH + Double Ratchet). Private keys wrapped with PBKDF2(password). Server only sees ciphertext.
-- **Auth**: JWT (email/password) + (Google OAuth disabled in standalone; easy to add your own) + TOTP 2FA + Cloudflare Turnstile captcha + per-IP rate limiting
-- **Translation**: Pluggable (currently stub / no-op until you configure a provider)
-- **File storage**: MongoDB GridFS with TTL metadata (24h) — fully self-contained, no external storage service
-- **Calls**: WebRTC peer-to-peer with STUN
-- **PWA**: Installable on iOS, Android, desktop; service worker; web push (VAPID)
+## Architecture (current)
 
-## Implemented
+- **Backend:** FastAPI + MongoDB Atlas (TTL indexes for 24h auto-delete) + Redis (production rate limits + session revocation)
+- **Production API:** `https://ssc-api-4jp3wuccwa-ew.a.run.app` (Cloud Run)
+- **Realtime:** WebSocket (`/api/ws`) for messages, typing, read receipts, WebRTC signaling
+- **E2E encryption:**
+  - **Web/PWA:** Legacy RSA-OAEP 2048 + AES-256-GCM (groups, attachments, stories, migration)
+  - **Android APK:** Signal Protocol on 1:1 text, 1:1 attachments, group messages (`signal_group_v1`), stories (`signal_status_v1`), and encrypted call signaling (libsignal **0.96.2**, X3DH + Double Ratchet + Sender Keys)
+  - **Account unlock:** RSA vault wrapped with PBKDF2(password) — orthogonal to ratchet
+  - Server only stores ciphertext
+- **Auth:** HttpOnly session cookie (web) + in-memory JWT (native) · email/password · Google OAuth · TOTP 2FA with **10 backup codes** · Cloudflare Turnstile (production) · per-IP rate limiting
+- **Translation:** On-device ML Kit on Android APK (Engine 9); server translation **off by default**
+- **File storage:** MongoDB GridFS with TTL metadata (24h)
+- **Calls:** WebRTC P2P mesh (~6 participants); TURN credentials configured (off-LAN verification pending)
+- **Push:** FCM (Android) + Web VAPID
+- **PWA:** Installable; service worker; manifest + icons
 
-### Iteration 1 (2026-06-17)
-- ✅ Landing + Auth (email/password primary; Google OAuth stubbed/disabled)
-- ✅ Username validation (4–12, blocks SSC/ADMIN/NSFW)
-- ✅ Client-side RSA-OAEP + PBKDF2 + AES-GCM private-key wrapping
-- ✅ Conversation creation by username search
-- ✅ E2E encrypted messaging (per-recipient wrapped keys, per-message ephemeral AES)
-- ✅ Realtime WebSocket + typing indicator
-- ✅ Auto-translation toggle per chat (stub in standalone; wire your provider to activate)
-- ✅ Countdown badge + MongoDB TTL for 24h recycle
-- ✅ File upload (Mongo GridFS, 24h TTL)
-- ✅ WebRTC voice + video calls (P2P)
-- ✅ Panic wipe (1.5s hold) — wipes chats/files/calls; **account + friends survive**; auto logout
-- ✅ Encrypted vault unlock prompt
-- ✅ 35/35 backend tests pass
+## Security engines (shipped)
 
-### Iteration 2 (2026-06-17)
-- ✅ Cloudflare Turnstile captcha at register + login
-- ✅ Per-IP rate limiting (5 register/hr, 10 login/5min)
-- ✅ TOTP 2FA (pyotp) — setup with QR, verify, disable, login challenge
-- ✅ Web push notifications (VAPID) — backend send + service worker + subscription
-- ✅ PWA — manifest.json, service worker, app icons, installable
-- ✅ Group chats — multi-recipient encryption, member picker UI
-- ✅ Read receipts — single check (sent), double check gray (read by some), double check cyan (read by all)
-- ✅ Security: FIX — TOTP secret leak via /auth/me (caught by testing agent, fixed)
-- ✅ 58/58 backend tests pass
+| Engine | Scope |
+|--------|--------|
+| 1 — Retention | TTL, plaintext leak closure, logging hygiene |
+| 2 — E2E integrity | Vault, file ACL, API integrity |
+| 3 — Client footprint | Panic orchestrator, SW purge, localStorage policy |
+| 4 — Metadata minimization | last_seen, generic push |
+| 5 — Session hardening | HttpOnly cookie, native JWT, Redis revocation |
+| 8 — Signal Protocol | Android Signal surfaces (8.10 Web blocked — no official WASM) |
+| 9 — Translation privacy | On-device ML Kit; no server plaintext on APK |
 
-### Iteration 3 (2026-06-17)
-- ✅ **Verified handshake** — safety number (60-char fingerprint of both public keys) + QR code modal; mark peer as verified, badge in chat header
-- ✅ **Group voice/video calls** — full-mesh WebRTC up to ~6 participants; signaling reuses existing `call-*` WS events with `group: true` flag
-- ✅ **Status / Stories** — 24h E2E-encrypted ephemeral posts (text + background colors); stories bar at top of sidebar; auto-advance viewer; viewer count for author
-- ✅ **Server-side validation** that `encrypted_keys` covers every conversation participant — prevents lock-out attacks
-- ✅ **Privacy hardening** — GET /statuses now projects encrypted_keys to caller's entry only (no recipient enumeration); viewers list only visible to author
-- ✅ 79/79 backend tests pass (58 regression + 21 new)
+See `memory/SSC-ROADMAP.md` for gate status and remaining work.
 
-## Deferred / next iterations
-- **Signal Protocol expansion** — Engine 8 complete for Android 1:1 text + 1:1 call signaling. Remaining: attachments, web WASM, group Sender Keys (see `SSC-ROADMAP.md`).
-- **React Native / native app store wrappers** — PWA already works on iOS/Android/desktop and is installable. For Apple App Store / Google Play presence we'd wrap with **Capacitor.js**, requiring Apple Developer account ($99/yr) + Mac for iOS builds. Separate project.
-- **Real Cloudflare Turnstile keys** — get from dash.cloudflare.com → Turnstile → "Add Site". Replace `TURNSTILE_SITEKEY` + `TURNSTILE_SECRET` in `/app/backend/.env`.
-- **Redis-backed rate limit** for multi-worker prod
-- **Group voice/video for >6 participants** — needs SFU (e.g. mediasoup, LiveKit)
-- **Server-side modular split** — server.py is 1082 lines
-- **2FA backup codes**
-- **Invite links** with one-time encryption handshake
+## Implemented (MVP + post-MVP)
+
+### Core messaging
+- Landing + Auth (email/password + Google OAuth on web + native)
+- Username validation + search-first add contacts (friend requests)
+- Client-side RSA-OAEP + PBKDF2 + AES-GCM private-key wrapping
+- 1:1 and group E2E encrypted messaging
+- Realtime WebSocket + typing + read receipts
+- Auto-translation toggle (on-device on Android; server off by default)
+- 24h countdown + MongoDB TTL recycle
+- File upload (GridFS, encrypted envelope, ACL via message)
+- Panic wipe (1.5s hold) — wipes chats/files/calls; account + friends survive; session revoked
+- Encrypted vault unlock prompt
+- Full UI i18n (EN / ES / RO)
+
+### Security & auth
+- Cloudflare Turnstile captcha (register + login)
+- Per-IP rate limiting (Redis in production)
+- TOTP 2FA — setup QR, verify, disable, login challenge, **backup codes**
+- Verified handshake — safety numbers v3 + QR; verified badge in chat
+- Google OAuth (web GIS + native redirect via Cloud Run)
+
+### Social & media
+- Contacts + friend requests (mutual required before chat)
+- Group chats — multi-recipient encryption
+- Stories / statuses — 24h E2E ephemeral posts
+- Group voice/video calls — mesh WebRTC up to ~6
+- 1:1 voice/video calls — WebRTC P2P; Signal-encrypted signaling on Android
+
+### Native / deploy
+- Capacitor Android APK (production URL baked via `frontend/.env.production.local`)
+- Firebase App Distribution for testers
+- FCM native push + Web VAPID push
+- PWA installable on iOS/Android/desktop
+
+### Retired
+- **Invite links** — removed 2026-06-24; username search is sufficient
+
+## Deferred / remaining (see roadmap)
+
+- **Custom domain + Turnstile** (~28 Jun 2026)
+- **Two-phone smoke + TURN verification** (founder manual)
+- **Signal on Web** (8.10) — blocked until Signal ships browser WASM
+- **Unified identity** — retire dual RSA + Curve25519 registration
+- **AGPL legal review** before public Play Store
+- **WebSocket Redis pub-sub** (multi-worker Cloud Run)
+- **SFU** for group calls >6 (mediasoup / LiveKit)
+- **iOS Capacitor** ($99/yr + Mac)
+- **Engine 6** — own-metal Mongo / push hardening (post-investors)
+- **Frontend automated tests** — in progress
+
+## Test health (2026-06-24)
+
+- Backend pytest: **476 passed**, 1 skipped (477 collected)
+- Engine 1–5, 8, 9 gates: **PASS**
+- `e2e_smoke.py`: **PASS**
 
 ## Endpoints (current)
+
 ### Auth
 - `POST /api/auth/register` — captcha_token, email, password, username, public_key, encrypted_private_key, pk_salt, language
 - `POST /api/auth/login` — email, password, totp_code (if 2FA), captcha_token
 - `GET  /api/auth/me`
 - `POST /api/auth/logout`
 - `POST /api/auth/check-username`
-- `POST /api/auth/google/session`
-- `POST /api/auth/google/finish-setup`
-- `POST /api/auth/2fa/setup` → secret + otpauth_url
+- `POST /api/auth/google/session` · `POST /api/auth/google/finish-setup` · `GET /api/auth/google/config`
+- `POST /api/auth/2fa/setup` → secret + otpauth_url + backup_codes
 - `POST /api/auth/2fa/verify` — code
-- `POST /api/auth/2fa/disable` — code
+- `POST /api/auth/2fa/disable` — password + code
+- `POST /api/auth/2fa/backups` — regenerate backup codes
 
-### Users / Conversations / Messages
+### Users / Contacts / Conversations / Messages
 - `GET  /api/users/search?q=`
 - `GET  /api/users/{user_id}/public`
 - `PATCH /api/users/me`
-- `POST /api/conversations` (1-on-1 OR group with `is_group:true`, `peer_usernames`, `name`)
-- `GET  /api/conversations`
-- `GET  /api/conversations/{id}/messages`
-- `GET  /api/conversations/{id}/reads`
-- `POST /api/messages` — encrypted blob + encrypted_keys per recipient
-- `POST /api/messages/read` — mark conversation read
-- `DELETE /api/conversations/{id}`
+- `POST /api/contacts/request` · `GET /api/contacts` · `POST /api/contacts/requests/accept`
+- `POST /api/conversations` (1-on-1 OR group)
+- `GET  /api/conversations` · `GET /api/conversations/{id}/messages`
+- `POST /api/messages` — encrypted blob + protocol field (`legacy_rsa`, `signal_v1`, `signal_group_v1`, …)
+- `POST /api/messages/read` · `DELETE /api/conversations/{id}`
 
-### Translation / Files / Push
-- `POST /api/translate`
-- `POST /api/files/upload`
-- `GET  /api/files/{file_id}`
-- `POST /api/push/subscribe`
-- `POST /api/push/unsubscribe`
-- `GET  /api/push/public-key`
-- `GET  /api/config`
+### Signal / Keys (Android)
+- `POST /api/keys/prekey-bundle` · `GET /api/keys/prekey-bundle/{user_id}`
+
+### Translation / Files / Push / Status
+- `POST /api/translate` (disabled by default in production)
+- `POST /api/files/upload` · `GET /api/files/{file_id}`
+- `POST /api/push/subscribe` · `GET /api/push/public-key`
+- `POST /api/statuses` · `GET /api/statuses`
+- `GET  /api/config` · `GET /api/health`
 - `POST /api/panic-wipe`
-- `WS   /api/ws?token=` — messages, typing, read, conversation-created, WebRTC signaling
+- `WS   /api/ws?token=` — messages, typing, read, calls, WebRTC signaling
