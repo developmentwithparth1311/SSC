@@ -29,7 +29,7 @@ def test_charter_collections_cover_ttl_ephemeral():
 
 
 def test_charter_persistent_includes_account_and_sessions():
-    for coll in ("users", "contacts", "user_sessions"):
+    for coll in ("users", "contact_rosters", "user_sessions"):
         assert coll in CHARTER_PERSISTENT_COLLECTIONS
 
 

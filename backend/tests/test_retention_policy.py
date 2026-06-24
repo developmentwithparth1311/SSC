@@ -29,7 +29,10 @@ LIFESPAN_COLLECTIONS = {
     "message_reads",
     "statuses",
     "friend_requests",
-    "contacts",
+    "contact_seals",
+    "contact_blocks",
+    "contact_mutes",
+    "contact_rosters",
 }
 
 

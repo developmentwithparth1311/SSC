@@ -38,12 +38,19 @@ def test_metadata_surfaces_include_last_seen_and_push():
     assert "contacts_graph" in METADATA_SURFACES
 
 
-def test_contacts_tradeoff_documented():
+def test_contacts_graph_blind_not_tradeoff():
+    from core.metadata_policy import CONTACTS_GRAPH_BLIND
+
     assert CONTACTS_PERSISTENT is True
-    assert "user_id" in CONTACTS_ALLOWED_FIELDS
-    assert "contact_id" in CONTACTS_ALLOWED_FIELDS
+    assert CONTACTS_GRAPH_BLIND is True
+    assert "seal" in CONTACTS_ALLOWED_FIELDS
     tradeoffs = accepted_tradeoffs()
-    assert any(s.surface_id == "contacts_graph" for s in tradeoffs)
+    assert not any(s.surface_id == "contacts_graph" for s in tradeoffs)
+
+
+def test_m4_resolved():
+    resolved = {g.gap_id for g in METADATA_GAPS if g.resolved}
+    assert "M4" in resolved
 
 
 def test_engine4_gaps_m1_m3_resolved():

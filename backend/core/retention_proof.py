@@ -19,7 +19,10 @@ CHARTER_EPHEMERAL_COLLECTIONS = (
 # Charter §11: may persist (account + social graph + active sessions/devices).
 CHARTER_PERSISTENT_COLLECTIONS = (
     "users",
-    "contacts",
+    "contact_seals",
+    "contact_rosters",
+    "contact_blocks",
+    "contact_mutes",
     "user_sessions",
     "push_subscriptions",
     "native_push_tokens",

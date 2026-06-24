@@ -34,8 +34,16 @@ async def _ensure_indexes() -> None:
     await db.friend_requests.create_index([("to_user_id", 1), ("status", 1)])
     await db.friend_requests.create_index([("from_user_id", 1), ("to_user_id", 1)], unique=True)
     await db.friend_requests.create_index("expires_at", expireAfterSeconds=0)
-    await db.contacts.create_index([("user_id", 1), ("contact_id", 1)], unique=True)
-    await db.contacts.create_index("contact_id")
+    await db.contact_seals.create_index("seal", unique=True)
+    await db.contact_blocks.create_index("seal", unique=True)
+    await db.contact_mutes.create_index("seal", unique=True)
+    await db.contact_rosters.create_index("user_id", unique=True)
+
+    from core.contact_graph import migrate_legacy_contacts
+
+    migrated = await migrate_legacy_contacts()
+    if migrated:
+        logger.info(f"contact graph migration: {migrated} mutual pairs from legacy contacts")
     await db.signal_prekey_bundles.create_index("user_id", unique=True)
     await backfill_retention_ttl_fields()
     logger.info(f"SSC backend ready — database: {DB_NAME}")

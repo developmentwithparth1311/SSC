@@ -126,7 +126,7 @@ User holds PANIC 1.5s
 - User's stories/statuses and call records (if any)
 - Sessions and push endpoints (forces re-login)
 
-**Does not delete:** `users` (account), `contacts`, `friend_requests` — login and friend list survive (wife scenario).
+**Does not delete:** `users` (account), contact graph (`contact_seals` / `contact_rosters`), `friend_requests` — login and friend list survive (wife scenario).
 
 Client panic **must not** depend on server success to wipe local secrets (offline-safe wipe in 3.6).
 

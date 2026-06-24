@@ -1,5 +1,5 @@
 """
-Contacts / Friend Requests router.
+Contacts / Friend Requests router — server-blind graph (contact_graph.py).
 """
 import asyncio
 import uuid
@@ -7,7 +7,16 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 
 from core.auth import get_current_user
-from core.contact_helpers import are_contacts
+from core.contact_graph import (
+    are_contacts,
+    establish_mutual_contact,
+    get_roster_contact_ids,
+    get_roster_prefs,
+    is_blocked_pair,
+    remove_mutual_contact,
+    set_block,
+    set_mute,
+)
 from core.database import db
 from core.logging_config import logger
 from core.models import FriendRequestActionIn, SendFriendRequestIn
@@ -30,17 +39,12 @@ async def send_friend_request(body: SendFriendRequestIn, current=Depends(get_cur
         raise HTTPException(404, "User not found")
     if target["user_id"] == current["user_id"]:
         raise HTTPException(400, "Cannot send request to yourself")
-    blocked = await db.contacts.find_one({
-        "$or": [
-            {"user_id": current["user_id"], "contact_id": target["user_id"], "blocked": True},
-            {"user_id": target["user_id"], "contact_id": current["user_id"], "blocked": True},
-        ]
-    })
-    if blocked:
-        raise HTTPException(403, "Cannot send request - blocked")
 
     if await are_contacts(current["user_id"], target["user_id"]):
         return {"ok": True, "message": "Already contacts"}
+
+    if await is_blocked_pair(current["user_id"], target["user_id"]):
+        raise HTTPException(403, "Cannot send request - blocked")
 
     existing = await db.friend_requests.find_one({
         "$or": [
@@ -100,19 +104,7 @@ async def accept_friend_request(body: FriendRequestActionIn, current=Depends(get
     )
     logger.info(f"friend request accepted: {body.request_id} by {current['user_id']}")
 
-    now = iso(now_utc())
-    for a, b in ((req["from_user_id"], req["to_user_id"]), (req["to_user_id"], req["from_user_id"])):
-        await db.contacts.update_one(
-            {"user_id": a, "contact_id": b},
-            {"$setOnInsert": {
-                "user_id": a,
-                "contact_id": b,
-                "created_at": now,
-                "blocked": False,
-                "muted": False,
-            }},
-            upsert=True,
-        )
+    await establish_mutual_contact(req["from_user_id"], req["to_user_id"])
 
     asyncio.create_task(send_push_for_friend_accept(req["from_user_id"], current))
     return {"ok": True}
@@ -130,8 +122,7 @@ async def reject_friend_request(body: FriendRequestActionIn, current=Depends(get
 
 @router.get("")
 async def list_contacts(current=Depends(get_current_user)):
-    contact_docs = await db.contacts.find({"user_id": current["user_id"]}, {"_id": 0}).to_list(500)
-    contact_ids = [c["contact_id"] for c in contact_docs]
+    contact_ids = await get_roster_contact_ids(current["user_id"])
     if not contact_ids:
         return []
     from core.last_seen import project_user_for_peer
@@ -142,58 +133,47 @@ async def list_contacts(current=Depends(get_current_user)):
     ).to_list(500)
     user_map = {u["user_id"]: u for u in users}
     result = []
-    for doc in contact_docs:
-        u = project_user_for_peer(user_map.get(doc["contact_id"]))
-        if u:
-            result.append({
-                **u,
-                "blocked": doc.get("blocked", False),
-                "muted": doc.get("muted", False),
-            })
+    for contact_id in contact_ids:
+        if not await are_contacts(current["user_id"], contact_id):
+            continue
+        u = project_user_for_peer(user_map.get(contact_id))
+        if not u:
+            continue
+        prefs = await get_roster_prefs(current["user_id"], contact_id)
+        result.append({
+            **u,
+            "blocked": prefs.get("blocked", False),
+            "muted": prefs.get("muted", False),
+        })
     return result
 
 
 @router.delete("/{contact_user_id}")
 async def remove_contact(contact_user_id: str, current=Depends(get_current_user)):
-    await db.contacts.delete_many({"$or": [
-        {"user_id": current["user_id"], "contact_id": contact_user_id},
-        {"user_id": contact_user_id, "contact_id": current["user_id"]},
-    ]})
+    await remove_mutual_contact(current["user_id"], contact_user_id)
     return {"ok": True}
 
 
 @router.post("/{contact_user_id}/block")
 async def block_contact(contact_user_id: str, current=Depends(get_current_user)):
-    await db.contacts.update_one(
-        {"user_id": current["user_id"], "contact_id": contact_user_id},
-        {"$set": {"blocked": True}},
-    )
+    await set_block(current["user_id"], contact_user_id, blocked_flag=True)
     logger.info(f"user blocked contact: {current['user_id']} blocked {contact_user_id}")
     return {"ok": True}
 
 
 @router.post("/{contact_user_id}/unblock")
 async def unblock_contact(contact_user_id: str, current=Depends(get_current_user)):
-    await db.contacts.update_one(
-        {"user_id": current["user_id"], "contact_id": contact_user_id},
-        {"$set": {"blocked": False}},
-    )
+    await set_block(current["user_id"], contact_user_id, blocked_flag=False)
     return {"ok": True}
 
 
 @router.post("/{contact_user_id}/mute")
 async def mute_contact(contact_user_id: str, current=Depends(get_current_user)):
-    await db.contacts.update_one(
-        {"user_id": current["user_id"], "contact_id": contact_user_id},
-        {"$set": {"muted": True}},
-    )
+    await set_mute(current["user_id"], contact_user_id, muted_flag=True)
     return {"ok": True}
 
 
 @router.post("/{contact_user_id}/unmute")
 async def unmute_contact(contact_user_id: str, current=Depends(get_current_user)):
-    await db.contacts.update_one(
-        {"user_id": current["user_id"], "contact_id": contact_user_id},
-        {"$set": {"muted": False}},
-    )
+    await set_mute(current["user_id"], contact_user_id, muted_flag=False)
     return {"ok": True}

@@ -66,10 +66,13 @@ This charter defines:
 
 | Store | Collection | Max lifetime (target) | Allowed fields | Risk |
 |-------|------------|----------------------|----------------|------|
-| MongoDB | `contacts` | **Persistent** (panic may keep — wife scenario) | `user_id`, `contact_id`, `blocked`, `muted`, `created_at` | **Who you know** |
+| MongoDB | `contact_seals` | **Persistent** (panic may keep — wife scenario) | `seal`, `created_at` | Blind pair edge (no plaintext user ids) |
+| MongoDB | `contact_rosters` | **Persistent** | `user_id`, `ciphertext`, `iv`, `version` | Pepper-encrypted friend list |
+| MongoDB | `contact_blocks` | **Persistent** | `seal`, `created_at` | Blind block edge |
+| MongoDB | `contact_mutes` | **Persistent** | `seal`, `created_at` | Blind mute edge |
 | MongoDB | `friend_requests` | **Pending:** 7d TTL; **accepted/rejected:** purge 24h after resolution (step 1.3) | `request_id`, user ids, usernames, `status`, `created_at` | Request history |
 
-**Charter decision (v1.0, Engine 4.6):** Contacts **remain** until user removes them — required for app function and panic UX. **Accepted metadata tradeoff** — see `METADATA_MINIMIZATION_CHARTER.md`.
+**Charter decision (v1.1, contact graph privacy):** Social graph **remains** until user removes it — required for app function and panic UX. Stored as **blind seals + encrypted rosters** — see `CONTACT_GRAPH_PRIVACY_CHARTER.md`.
 
 ---
 
@@ -256,7 +259,7 @@ cd backend
 When step 1.7 is complete, an operator with MongoDB access **24 hours after last activity** should find:
 
 - ✅ `users` account row (+ wrapped key)
-- ✅ `contacts` (if not panic-wiped)
+- ✅ `contact_seals` / `contact_rosters` (if not panic-wiped)
 - ✅ Active `user_sessions` / push tokens for logged-in devices
 - ❌ No messages, files, statuses, conversations, reads, or invite tokens
 

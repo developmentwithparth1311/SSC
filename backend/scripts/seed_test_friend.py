@@ -85,15 +85,12 @@ async def main():
     if not main_user:
         raise SystemExit(f"Main user @{MAIN_USERNAME} not found — run seed_test_user.py first")
 
+    from core.contact_graph import remove_mutual_contact
+
     old_friend = await db.users.find_one({"username": FRIEND_USERNAME})
     if old_friend:
         fid = old_friend["user_id"]
-        await db.contacts.delete_many({
-            "$or": [
-                {"user_id": main_user["user_id"], "contact_id": fid},
-                {"user_id": fid, "contact_id": main_user["user_id"]},
-            ]
-        })
+        await remove_mutual_contact(main_user["user_id"], fid)
     await db.users.delete_many({"$or": [{"email": FRIEND_EMAIL}, {"username": FRIEND_USERNAME}]})
 
     print("Generating encryption keys for testfriend…")
@@ -116,25 +113,10 @@ async def main():
     }
     await db.users.insert_one(friend_doc)
 
+    from core.contact_graph import establish_mutual_contact
+
     now = datetime.now(timezone.utc).isoformat()
-    await db.contacts.insert_many([
-        {
-            "user_id": main_user["user_id"],
-            "contact_id": friend_id,
-            "username": FRIEND_USERNAME,
-            "blocked": False,
-            "muted": False,
-            "created_at": now,
-        },
-        {
-            "user_id": friend_id,
-            "contact_id": main_user["user_id"],
-            "username": MAIN_USERNAME,
-            "blocked": False,
-            "muted": False,
-            "created_at": now,
-        },
-    ])
+    await establish_mutual_contact(main_user["user_id"], friend_id, created_at=now)
 
     client.close()
 

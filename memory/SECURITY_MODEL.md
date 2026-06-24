@@ -70,7 +70,7 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 
 **Yes — on every installed client.** Android, Windows, and Mac use official libsignal **0.96.2**. Browser-tab Web/PWA is **not a product surface** (RSA legacy for founder dev only). Engine 8.10 browser WASM is **retired**; Engine 10 desktop replaces it.
 
-**P1 remaining:** unified identity (curve primary) · contacts graph privacy (server-blind).
+**P1 complete:** unified identity (curve primary) · contacts graph privacy (server-blind).
 
 **Will stay RSA-based:** Account vault unlock (password → private key). Orthogonal to ratchet transport.
 
@@ -84,7 +84,7 @@ UI labels: **SIG** (green) vs **RSA** (yellow) on messages and composer hints.
 | `legacy_rsa` messages | Ciphertext + IV + per-user wrapped keys |
 | 1:1 call signaling (upgraded) | Opaque `signaling_ciphertext` only |
 | Group call signaling | SDP + ICE (cleartext) |
-| Contacts | Who is friends with whom (persistent) — **P1: make server-blind** |
+| Contacts | Blind seals + pepper-encrypted rosters — **staff cannot read graph from DB export** |
 | Push | Generic body; routing metadata (tokens, conversation_id) |
 | Translation (Android APK) | **On-device only** (ML Kit) — decrypted text never sent to server |
 | Translation (web, dev only) | **Plaintext** if `TRANSLATION_ENABLED=true` — off in production |

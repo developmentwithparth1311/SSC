@@ -1,7 +1,7 @@
 """
 Server panic wipe — erases chat/call/file footprint; preserves account + social graph.
 
-Preserves: users, contacts, friend_requests (RETENTION_CHARTER wife scenario).
+Preserves: users, contact graph (seals/rosters), friend_requests (RETENTION_CHARTER wife scenario).
 Wipes: conversations, messages (sent + received), files (owned + attachments in those chats),
 statuses, call records, sessions, push endpoints.
 """
@@ -17,7 +17,14 @@ from core.logging_policy import safe_exception_label
 from core.token_revocation import revoke_token
 
 # Mongo collections intentionally NOT modified by panic wipe.
-PANIC_PRESERVE_COLLECTIONS = frozenset({"users", "contacts", "friend_requests"})
+PANIC_PRESERVE_COLLECTIONS = frozenset({
+    "users",
+    "friend_requests",
+    "contact_seals",
+    "contact_blocks",
+    "contact_mutes",
+    "contact_rosters",
+})
 
 # Collections panic wipe may delete from (audit / gate tests).
 PANIC_WIPE_COLLECTIONS = frozenset({

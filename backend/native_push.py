@@ -101,12 +101,9 @@ async def send_native_to_users(
         uid = doc["user_id"]
         doc_silent = silent
         if sender_id:
-            muted = await db.contacts.find_one({
-                "user_id": uid,
-                "contact_id": sender_id,
-                "muted": True,
-            })
-            if muted:
+            from core.contact_graph import is_muted_pair
+
+            if await is_muted_pair(uid, sender_id):
                 doc_silent = True
 
         fcm_token = doc.get("token")

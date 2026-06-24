@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (installed-clients-only · Engine 10 desktop · group cap 8)
+**Updated:** 2026-06-24 (contact graph privacy · unified identity · Engine 10 desktop)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -105,9 +105,9 @@ Engine 10            ✅ DESKTOP (Windows installer · Mac dmg config · libsign
 
 **Product surfaces:** Android APK · Windows `.exe` · Mac `.dmg` (build on Mac) · iOS deferred.
 
-**Next (P1):**
+**P1 security — complete:**
 1. [x] **Unified identity** — libsignal curve primary (`memory/UNIFIED_IDENTITY_CHARTER.md`)
-2. [ ] **Contacts graph privacy** — server must not see who is friends with whom
+2. [x] **Contacts graph privacy** — blind seals + encrypted rosters (`memory/CONTACT_GRAPH_PRIVACY_CHARTER.md`)
 
 Details: `memory/SECURITY_MODEL.md`
 
@@ -142,13 +142,13 @@ Details: `memory/SECURITY_MODEL.md`
 
 | ID | Item | Priority | Engine |
 |----|------|----------|--------|
-| M4 | Contacts graph server metadata | **High — fix** (staff-blind graph) | 11+ |
+
 | S3 | Native session lost on force-close | Low (accepted) | 5 doc |
 
 | — | iOS libsignal + App Store | Deferred | — |
 
 
-**Closed:** G6, G9, C8, M5
+**Closed:** G6, G9, C8, M4, M5
 
 ---
 
@@ -191,7 +191,7 @@ cd C:\Users\smash\SSC-main\backend
 - [x] Engine 10: Windows + Mac desktop (`memory/DESKTOP_CLIENT_CHARTER.md`)
 - [x] Unified identity (libsignal curve primary · prekeys required · `run_unified_identity_gate.py`)
 - [x] Web/PWA product retired — browser shows download-only landing; chat/register gated
-- [ ] Contacts graph privacy (server-blind friend graph)
+- [x] Contacts graph privacy (blind seals + encrypted rosters · `run_contacts_graph_gate.py`)
 - [x] AGPL legal review (`memory/AGPL_COMPLIANCE.md`, `LICENSE`, in-app source offer)
 - [x] Group video cap **8** (mesh; SFU for 9+ deferred to domain ~28 Jun)
 
@@ -211,8 +211,8 @@ cd C:\Users\smash\SSC-main\backend
 
 | Metric | Value |
 |--------|-------|
-| pytest collected | **517** |
-| pytest result | **516 passed**, 1 skipped, 0 failed |
+| pytest collected | **529** |
+| pytest result | **528 passed**, 1 skipped, 0 failed |
 | Engine 1–5 gates | **PASS** |
 | Engine 8 gate | **PASS** (54 unit + 10 integration + proof through 8.12) |
 | Engine 9 gate | **PASS** |
@@ -223,6 +223,7 @@ cd C:\Users\smash\SSC-main\backend
 | AGPL gate | **PASS** (`run_agpl_gate.py`) |
 | Engine 10 gate | **PASS** (`run_engine10_gate.py`) |
 | Unified identity gate | **PASS** (`run_unified_identity_gate.py`) |
+| Contacts graph gate | **PASS** (`run_contacts_graph_gate.py`) |
 
 ---
 
@@ -258,3 +259,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | Group video mesh cap raised to **8**; contacts privacy + unified identity locked P1 |
 | 2026-06-24 | Web/PWA chat retired — download landing + `InstalledClientGate` |
 | 2026-06-24 | Unified identity — `identity_primary` signal_v1, prekeys required on installed clients |
+| 2026-06-24 | Contact graph privacy — blind seals, encrypted rosters, M4 closed |

@@ -21,10 +21,11 @@ LAST_SEEN_STORAGE_TTL_DAYS = 7              # older than this → treat as unkno
 GENERIC_PUSH_TITLE = "SSC"
 GENERIC_PUSH_BODY = "New activity"
 
-# Contacts tradeoff (Engine 4.6) — persistent social graph accepted
+# Contacts graph (Engine 4.6 / contact graph privacy) — blind seals + encrypted rosters
 CONTACTS_PERSISTENT = True
+CONTACTS_GRAPH_BLIND = True
 CONTACTS_ALLOWED_FIELDS = frozenset({
-    "user_id", "contact_id", "blocked", "muted", "created_at",
+    "seal", "ciphertext", "iv", "version", "user_id", "updated_at",
 })
 
 
@@ -80,11 +81,11 @@ METADATA_SURFACES: Dict[str, MetadataSurface] = {
     ),
     "contacts_graph": MetadataSurface(
         surface_id="contacts_graph",
-        collection_or_channel="contacts",
+        collection_or_channel="contact_seals + contact_rosters",
         risk="Server knows who you know",
         engine4_step="4.6",
-        mitigation="Persistent for app function + panic UX; documented tradeoff",
-        accepted_tradeoff=True,
+        mitigation="Seal-based edges + pepper-encrypted rosters; staff-blind DB export",
+        accepted_tradeoff=False,
     ),
     "friend_requests": MetadataSurface(
         surface_id="friend_requests",
@@ -106,7 +107,7 @@ METADATA_GAPS: List[MetadataGap] = [
         "M3", "Push data payloads include author_username and group_name", GapSeverity.MEDIUM, "4.5", resolved=True,
     ),
     MetadataGap(
-        "M4", "Contacts graph is persistent server metadata", GapSeverity.MEDIUM, "4.6", resolved=False,
+        "M4", "Contacts graph is persistent server metadata", GapSeverity.MEDIUM, "4.6", resolved=True,
     ),
     MetadataGap(
         "M5", "Translation sends plaintext to server when enabled", GapSeverity.CRITICAL, None, "9", resolved=True,

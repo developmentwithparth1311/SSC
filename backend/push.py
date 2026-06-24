@@ -56,12 +56,9 @@ async def send_push(recipients: list, payload: dict, sender_id: str = None):
         for s in subs:
             p = dict(payload)
             if sender_id:
-                muted = await db.contacts.find_one({
-                    "user_id": s["user_id"],
-                    "contact_id": sender_id,
-                    "muted": True,
-                })
-                if muted:
+                from core.contact_graph import is_muted_pair
+
+                if await is_muted_pair(s["user_id"], sender_id):
                     p["silent"] = True
             try:
                 webpush(

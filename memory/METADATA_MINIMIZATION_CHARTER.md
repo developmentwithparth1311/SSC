@@ -113,17 +113,19 @@ or
 
 ## 5. Contacts metadata (Step 4.6)
 
-### Decision (v1.0 — accepted tradeoff)
+### Decision (v1.1 — server-blind graph)
 
-The `contacts` collection **remains persistent** because:
+Friend graph **remains persistent** for messaging and panic UX, but is stored as:
 
-1. Friend list is required for messaging and panic UX (wife scenario — account + friends survive panic)
-2. Only stores `user_id`, `contact_id`, `blocked`, `muted`, `created_at` — no message content
-3. Alternative (re-derive graph from ciphertext only) is Engine 8+ scope
+1. `contact_seals` — HMAC pair edges (no plaintext user ids in DB)
+2. `contact_rosters` — AES-GCM ciphertext per user (pepper-derived key)
+3. `contact_blocks` / `contact_mutes` — directional blind seals
+
+See `memory/CONTACT_GRAPH_PRIVACY_CHARTER.md`.
 
 | Gap ID | Status |
 |--------|--------|
-| M4 | **Accepted tradeoff** — documented, not a blocker |
+| M4 | **Resolved** — staff-blind graph (2026-06-24) |
 
 ---
 
@@ -173,7 +175,7 @@ After step 4.7, an operator should verify:
 
 - ✅ Peer API responses expose `online` boolean and coarsened `last_seen` only
 - ✅ Push payloads use generic title/body everywhere
-- ✅ Contacts graph persists with documented tradeoff
+- ✅ Contacts graph persists as blind seals + encrypted rosters
 - ❌ No usernames in push notification bodies
 
 ---
