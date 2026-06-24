@@ -3,6 +3,7 @@
  */
 import { api } from './api';
 import { dispatchContactsRefresh } from './contactRealtime';
+import { stopIncomingRingtone } from './callRingtone';
 import { getPlatform, isNativeApp } from './platform';
 
 let listenersAttached = false;
@@ -10,6 +11,13 @@ let listenersAttached = false;
 function handleNotificationData(data, action = 'open') {
   if (!data || typeof data !== 'object') return;
   const type = data.type || 'message';
+
+  if (type === 'call-end' || type === 'call-reject') {
+    stopIncomingRingtone();
+    sessionStorage.removeItem('ssc_pending_call');
+    window.dispatchEvent(new CustomEvent('ssc-call-ended'));
+    return;
+  }
 
   if (type === 'call') {
     const payload = {
@@ -74,6 +82,12 @@ function attachListeners(PushNotifications) {
     const type = data.type || notification?.data?.type;
     if (type === 'friend_request' || type === 'friend_accept') {
       dispatchContactsRefresh({ type, full: type === 'friend_accept' });
+      return;
+    }
+    if (data.type === 'call-end' || data.type === 'call-reject') {
+      stopIncomingRingtone();
+      sessionStorage.removeItem('ssc_pending_call');
+      window.dispatchEvent(new CustomEvent('ssc-call-ended'));
       return;
     }
     if (data.type === 'call' && data.silent !== '1') {

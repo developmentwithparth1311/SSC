@@ -28,6 +28,7 @@ export default function Message({
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
   const [error, setError] = useState(null);
+  const [vaultLocked, setVaultLocked] = useState(false);
 
   useEffect(() => subscribeMemoryWipe(() => {
     setPlaintext(null);
@@ -35,6 +36,7 @@ export default function Message({
     setTranslating(false);
     setShowTranslated(false);
     setError(null);
+    setVaultLocked(false);
   }), []);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function Message({
         if (mounted) {
           setPlaintext(pt);
           setError(null);
+          setVaultLocked(false);
         }
       } catch (e) {
         if (!mounted) return;
@@ -52,8 +55,10 @@ export default function Message({
         if (code === 'VAULT_LOCKED') {
           setPlaintext(null);
           setError(null);
+          setVaultLocked(true);
           return;
         }
+        setVaultLocked(false);
         if (code === 'NO_KEY') setError('NO_KEY');
         else setError('DECRYPT_FAIL');
       }
@@ -112,7 +117,10 @@ export default function Message({
       <div className={`px-3 py-2 ${bubbleClass} text-sm leading-relaxed break-words shadow`} data-testid={`message-${msg.message_id}`}>
         {error === 'DECRYPT_FAIL' && <span className="font-mono text-xs text-[#FF3B30]">[unable to decrypt]</span>}
         {error === 'NO_KEY' && <span className="font-mono text-xs text-[#FF3B30]">[no key for this device]</span>}
-        {!error && plaintext === null && (
+        {vaultLocked && (
+          <span className="font-mono text-xs text-[#FF9500]">[encrypted — reopen app to unlock]</span>
+        )}
+        {!error && !vaultLocked && plaintext === null && (
           <span className="font-mono text-xs text-[#A1A1AA]">decrypting…</span>
         )}
         {!error && plaintext !== null && (

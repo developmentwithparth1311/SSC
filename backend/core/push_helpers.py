@@ -10,6 +10,10 @@ async def send_push_for_call(*args, **kwargs):
     return await push_module.send_push_for_call(*args, **kwargs)
 
 
+async def send_push_for_call_end(*args, **kwargs):
+    return await push_module.send_push_for_call_end(*args, **kwargs)
+
+
 async def send_push_for_friend_request(*args, **kwargs):
     return await push_module.send_push_for_friend_request(*args, **kwargs)
 

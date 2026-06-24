@@ -116,6 +116,10 @@ export async function initCapacitor() {
     });
     await App.addListener('appStateChange', async ({ isActive }) => {
       if (!isActive) return;
+      try {
+        const { bootstrapSessionFromDevice } = await import('./sessionStore');
+        await bootstrapSessionFromDevice();
+      } catch {}
       await consumeLaunchUrl(App);
     });
   } catch {

@@ -1,13 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash } from '@phosphor-icons/react';
+import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, ArrowsLeftRight, CameraRotate } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
+import { useMobileLayout } from '../lib/use-mobile';
 import { getBackendUrl } from '../lib/platform';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 import {
   acquireLocalMediaStream,
   bindLocalPreview,
   bindRemoteStream,
+  applyVideoToPeerConnection,
+  DEFAULT_CAMERA_FACING,
+  getRemoteStreamFromPeerConnection,
+  oppositeCameraFacing,
+  removeVideoFromPeerConnection,
+  replaceVideoTrackFacing,
 } from '../lib/callMedia';
 import Avatar from './Avatar';
 
@@ -41,16 +48,41 @@ async function getRTCConfig() {
 
 export default function CallModal({ mode, direction, peer, user, socket, signal, onClose }) {
   const { t } = useLocale();
+  const isMobile = useMobileLayout();
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const activeModeRef = useRef(mode);
+  const cameraFacingRef = useRef(DEFAULT_CAMERA_FACING);
+  const renegotiatingRef = useRef(false);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'ringing');
+  const [activeMode, setActiveMode] = useState(mode);
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [modeBusy, setModeBusy] = useState(false);
   const startedAtRef = useRef(null);
+
+  useEffect(() => {
+    activeModeRef.current = activeMode;
+  }, [activeMode]);
+
+  const refreshRemoteBindings = useCallback(() => {
+    const pc = pcRef.current;
+    if (!pc) return;
+    const remoteStream = getRemoteStreamFromPeerConnection(pc);
+    if (!remoteStream) return;
+    bindRemoteStream({
+      videoEl: activeModeRef.current === 'video' ? remoteVideoRef.current : null,
+      audioEl: remoteAudioRef.current,
+      stream: remoteStream,
+    });
+    if (activeModeRef.current === 'video') {
+      bindLocalPreview(localVideoRef.current, localStreamRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     setupCall();
@@ -68,6 +100,12 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     return () => clearInterval(timer);
   }, [status]);
 
+  useEffect(() => {
+    if (activeMode === 'video') {
+      requestAnimationFrame(() => refreshRemoteBindings());
+    }
+  }, [activeMode, refreshRemoteBindings]);
+
   const setupCall = async () => {
     const rtcConfig = await getRTCConfig();
     const pc = new RTCPeerConnection(rtcConfig);
@@ -82,7 +120,7 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     };
     pc.ontrack = (e) => {
       bindRemoteStream({
-        videoEl: mode === 'video' ? remoteVideoRef.current : null,
+        videoEl: activeModeRef.current === 'video' ? remoteVideoRef.current : null,
         audioEl: remoteAudioRef.current,
         stream: e.streams[0],
       });
@@ -116,12 +154,45 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     }
   };
 
+  const applyRemoteMode = useCallback((nextMode) => {
+    setActiveMode(nextMode);
+    activeModeRef.current = nextMode;
+    if (nextMode === 'video') {
+      setVideoOff(false);
+      requestAnimationFrame(() => refreshRemoteBindings());
+    }
+  }, [refreshRemoteBindings]);
+
+  const handleRenegotiationOffer = async (data, signalingCtx) => {
+    const pc = pcRef.current;
+    if (!pc || renegotiatingRef.current) return;
+    renegotiatingRef.current = true;
+    try {
+      const nextMode = data.mode === 'video' ? 'video' : 'audio';
+      if (nextMode === 'video') {
+        await applyVideoToPeerConnection(pc, localStreamRef.current);
+      } else {
+        await removeVideoFromPeerConnection(pc, localStreamRef.current);
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await sendSignaling(socket, { type: 'call-answer', to: peer.user_id, sdp: answer }, signalingCtx);
+      applyRemoteMode(nextMode);
+    } catch {
+      toast.error(t('callMediaError'));
+    } finally {
+      renegotiatingRef.current = false;
+    }
+  };
+
   // listen for signaling pushed by parent (via window event hack)
   useEffect(() => {
     const handler = async (e) => {
       let data = e.detail;
       const pc = pcRef.current;
       if (!pc) return;
+      const signalingCtx = { peerUserId: peer.user_id, ourUserId: user?.user_id, peer, user, isGroup: false };
       try {
         data = await unpackIncomingSignaling(data, {
           myUserId: user?.user_id,
@@ -131,8 +202,14 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
         return;
       }
       if (data.type === 'call-answer' && data.from === peer.user_id) {
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        setStatus('connected');
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          if (status !== 'connected') setStatus('connected');
+        } catch {}
+      } else if (data.type === 'call-offer' && data.from === peer.user_id) {
+        if (status === 'connected' || pc.remoteDescription) {
+          await handleRenegotiationOffer(data, signalingCtx);
+        }
       } else if (data.type === 'ice-candidate' && data.from === peer.user_id) {
         try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
       } else if (data.type === 'call-end' && data.from === peer.user_id) {
@@ -143,7 +220,7 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     };
     window.addEventListener('ssc-signal', handler);
     return () => window.removeEventListener('ssc-signal', handler);
-  }, [peer.user_id, user?.user_id, onClose]);
+  }, [peer.user_id, user?.user_id, onClose, status, handleRenegotiationOffer, applyRemoteMode, t]);
 
   const cleanup = () => {
     try { pcRef.current?.close(); } catch {}
@@ -161,44 +238,169 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     const track = localStreamRef.current?.getAudioTracks?.()[0];
     if (track) { track.enabled = !track.enabled; setMuted(!track.enabled); }
   };
+
   const toggleVideo = () => {
     const track = localStreamRef.current?.getVideoTracks?.()[0];
     if (track) { track.enabled = !track.enabled; setVideoOff(!track.enabled); }
   };
 
+  const flipCamera = async () => {
+    const pc = pcRef.current;
+    const stream = localStreamRef.current;
+    if (!pc || !stream || activeMode !== 'video' || videoOff || modeBusy) return;
+    setModeBusy(true);
+    try {
+      const nextFacing = oppositeCameraFacing(cameraFacingRef.current);
+      await replaceVideoTrackFacing(pc, stream, nextFacing);
+      cameraFacingRef.current = nextFacing;
+      bindLocalPreview(localVideoRef.current, stream);
+    } catch {
+      toast.error(t('callCameraSwitchFailed'));
+    } finally {
+      setModeBusy(false);
+    }
+  };
+
+  const switchCallMode = async () => {
+    const pc = pcRef.current;
+    if (!pc || status !== 'connected' || modeBusy || renegotiatingRef.current) return;
+    const nextMode = activeMode === 'video' ? 'audio' : 'video';
+    const signalingCtx = { peerUserId: peer.user_id, ourUserId: user?.user_id, peer, user, isGroup: false };
+    setModeBusy(true);
+    renegotiatingRef.current = true;
+    try {
+      if (nextMode === 'video') {
+        await applyVideoToPeerConnection(pc, localStreamRef.current);
+        setVideoOff(false);
+        bindLocalPreview(localVideoRef.current, localStreamRef.current);
+      } else {
+        await removeVideoFromPeerConnection(pc, localStreamRef.current);
+        setVideoOff(false);
+      }
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendSignaling(
+        socket,
+        { type: 'call-offer', to: peer.user_id, mode: nextMode, sdp: offer, renegotiate: true },
+        signalingCtx,
+      );
+      setActiveMode(nextMode);
+      activeModeRef.current = nextMode;
+      if (nextMode === 'video') refreshRemoteBindings();
+    } catch {
+      toast.error(t('callMediaError'));
+    } finally {
+      renegotiatingRef.current = false;
+      setModeBusy(false);
+    }
+  };
+
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
+  const stageClass = isMobile
+    ? 'relative flex-1 w-full min-h-0 bg-[#0A0A0A]'
+    : 'relative w-full max-w-3xl aspect-video bg-[#121212] rounded-md tac-border';
+
+  const pipClass = isMobile
+    ? 'absolute bottom-4 left-3 w-28 h-36 object-cover rounded-md tac-border shadow-lg z-10'
+    : 'absolute top-3 right-3 w-32 h-24 object-cover rounded-md tac-border z-10';
+
   return (
-    <div className="fixed inset-0 z-[9998] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center safe-top safe-bottom">
+    <div
+      className={`fixed inset-0 z-[9998] bg-black flex flex-col safe-top safe-bottom ${
+        isMobile ? '' : 'bg-black/90 backdrop-blur-xl items-center justify-center'
+      }`}
+      data-testid="call-modal"
+    >
       <audio ref={remoteAudioRef} autoPlay playsInline className="sr-only" data-testid="call-remote-audio" />
-      <div className="relative w-full max-w-3xl aspect-video bg-[#121212] rounded-md tac-border overflow-hidden">
-        {mode === 'video' ? (
-          <video ref={remoteVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+
+      <div className={`${stageClass} overflow-hidden`}>
+        {activeMode === 'video' ? (
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+            data-testid="call-remote-video"
+          />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center">
+          <div className="w-full h-full flex flex-col items-center justify-center bg-[#121212]">
             <div className="mb-4">
               <Avatar user={peer} size="lg" className="!w-32 !h-32 !text-3xl !rounded-md" />
             </div>
             <div className="font-mono text-lg">@{peer.username}</div>
           </div>
         )}
-        {mode === 'video' && (
-          <video ref={localVideoRef} autoPlay muted playsInline className="absolute top-3 right-3 w-32 h-24 object-cover rounded-md tac-border" />
+        {activeMode === 'video' && (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className={pipClass}
+            data-testid="call-local-video"
+          />
         )}
-        <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 rounded font-mono text-[10px] tracking-widest text-[#A1A1AA]">
+        <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 rounded font-mono text-[10px] tracking-widest text-[#A1A1AA] z-10">
           {status === 'connected' ? `E2E · ${fmt(duration)}` : status.toUpperCase()}
         </div>
+        {activeMode === 'video' && videoOff && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#121212]/80 z-[5] pointer-events-none">
+            <VideoCameraSlash size={48} className="text-[#71717A]" />
+          </div>
+        )}
       </div>
-      <div className="mt-6 flex items-center gap-3">
-        <button onClick={toggleMute} data-testid="call-mute-button" className={`w-12 h-12 rounded-full flex items-center justify-center ${muted ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}>
+
+      <div className={`flex items-center gap-3 shrink-0 ${isMobile ? 'py-5 px-4' : 'mt-6'}`}>
+        <button
+          onClick={toggleMute}
+          data-testid="call-mute-button"
+          className={`w-12 h-12 rounded-full flex items-center justify-center ${muted ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}
+        >
           {muted ? <MicrophoneSlash size={20} /> : <Microphone size={20} />}
         </button>
-        {mode === 'video' && (
-          <button onClick={toggleVideo} data-testid="call-video-button" className={`w-12 h-12 rounded-full flex items-center justify-center ${videoOff ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}>
-            {videoOff ? <VideoCameraSlash size={20} /> : <VideoCamera size={20} />}
+
+        {activeMode === 'video' && (
+          <>
+            <button
+              onClick={toggleVideo}
+              data-testid="call-video-button"
+              className={`w-12 h-12 rounded-full flex items-center justify-center ${videoOff ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}
+            >
+              {videoOff ? <VideoCameraSlash size={20} /> : <VideoCamera size={20} />}
+            </button>
+            {!videoOff && (
+              <button
+                onClick={flipCamera}
+                disabled={modeBusy}
+                data-testid="call-flip-camera-button"
+                title={t('switchCamera')}
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-[#1A1A1A] tac-border hover:brightness-110 disabled:opacity-40"
+              >
+                <CameraRotate size={20} />
+              </button>
+            )}
+          </>
+        )}
+
+        {status === 'connected' && (
+          <button
+            onClick={switchCallMode}
+            disabled={modeBusy}
+            data-testid="call-mode-switch-button"
+            title={activeMode === 'video' ? t('switchToAudioCall') : t('switchToVideoCall')}
+            className="w-12 h-12 rounded-full flex items-center justify-center bg-[#1A1A1A] tac-border hover:brightness-110 disabled:opacity-40"
+          >
+            {activeMode === 'video' ? <Phone size={20} /> : <ArrowsLeftRight size={20} />}
           </button>
         )}
-        <button onClick={endCall} data-testid="call-end-button" className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110">
+
+        <button
+          onClick={endCall}
+          data-testid="call-end-button"
+          className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110"
+        >
           <Phone size={22} weight="fill" className="rotate-[135deg] text-white" />
         </button>
       </div>

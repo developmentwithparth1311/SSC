@@ -36,18 +36,19 @@ export function AuthProvider({ children }) {
   const [privateKey, setPrivateKey] = useState(null);
   const autoUnlockAttempted = useRef(null);
 
-  const tryAutoUnlockVault = useCallback(async (userData) => {
+  const tryAutoUnlockVault = useCallback(async (userData, { force = false } = {}) => {
     if (!userData?.encrypted_private_key || !userData?.pk_salt) return null;
-    if (autoUnlockAttempted.current === userData.user_id) return null;
-    autoUnlockAttempted.current = userData.user_id;
+    if (!force && autoUnlockAttempted.current === userData.user_id) return null;
     const password = await loadVaultCredential(userData.user_id);
     if (!password) return null;
+    autoUnlockAttempted.current = userData.user_id;
     try {
       const pk = await unwrapPrivateKey(userData.encrypted_private_key, userData.pk_salt, password);
       setPrivateKey(pk);
       return pk;
     } catch {
       clearVaultCredential(userData.user_id);
+      autoUnlockAttempted.current = null;
       return null;
     }
   }, []);
@@ -91,6 +92,11 @@ export function AuthProvider({ children }) {
   }, [refreshUser, runSilentBootstrap]);
 
   useEffect(() => {
+    if (!user?.encrypted_private_key || privateKey) return;
+    tryAutoUnlockVault(user, { force: true }).catch(() => {});
+  }, [user, privateKey, tryAutoUnlockVault]);
+
+  useEffect(() => {
     return registerMemoryWipeHandler(() => {
       setUser(null);
       setPrivateKey(null);
@@ -100,7 +106,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loginWithToken = async (token, userObj) => {
-    persistSessionToken(token);
+    await persistSessionToken(token);
     setUser(userObj);
     autoUnlockAttempted.current = null;
     ensurePreKeysUploaded().catch(() => {});

@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, X } from '@phosphor-icons/react';
+import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, CameraRotate } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 import {
   acquireLocalMediaStream,
   bindLocalPreview,
   bindRemoteStream,
+  DEFAULT_CAMERA_FACING,
+  oppositeCameraFacing,
+  replaceVideoTrackFacingOnMesh,
 } from '../lib/callMedia';
 
 /**
@@ -48,6 +51,8 @@ export default function GroupCallModal({
   const localVideoRef = useRef(null);
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const cameraFacingRef = useRef(DEFAULT_CAMERA_FACING);
   const [duration, setDuration] = useState(0);
   const startRef = useRef(null);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'incoming');
@@ -218,6 +223,23 @@ export default function GroupCallModal({
     if (t) { t.enabled = !t.enabled; setVideoOff(!t.enabled); }
   };
 
+  const flipCamera = async () => {
+    const stream = localStreamRef.current;
+    if (!stream || mode !== 'video' || videoOff || cameraBusy) return;
+    setCameraBusy(true);
+    try {
+      const nextFacing = oppositeCameraFacing(cameraFacingRef.current);
+      const pcs = Object.values(peersRef.current).map((p) => p.pc).filter(Boolean);
+      await replaceVideoTrackFacingOnMesh(pcs, stream, nextFacing);
+      cameraFacingRef.current = nextFacing;
+      bindLocalPreview(localVideoRef.current, stream);
+    } catch {
+      toast.error(t('callCameraSwitchFailed'));
+    } finally {
+      setCameraBusy(false);
+    }
+  };
+
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   const tiles = [{ user_id: me.user_id, username: me.username, isLocal: true }, ...Object.entries(peers).map(([uid, p]) => ({ user_id: uid, username: p.username, stream: p.stream }))];
   const cols = tiles.length <= 2 ? 1 : tiles.length <= 4 ? 2 : 3;
@@ -269,9 +291,22 @@ export default function GroupCallModal({
           {muted ? <MicrophoneSlash size={20} /> : <Microphone size={20} />}
         </button>
         {mode === 'video' && (
-          <button onClick={toggleVideo} data-testid="group-call-video" className={`w-12 h-12 rounded-full flex items-center justify-center ${videoOff ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}>
-            {videoOff ? <VideoCameraSlash size={20} /> : <VideoCamera size={20} />}
-          </button>
+          <>
+            <button onClick={toggleVideo} data-testid="group-call-video" className={`w-12 h-12 rounded-full flex items-center justify-center ${videoOff ? 'bg-[#FF3B30]' : 'bg-[#1A1A1A] tac-border'} hover:brightness-110`}>
+              {videoOff ? <VideoCameraSlash size={20} /> : <VideoCamera size={20} />}
+            </button>
+            {!videoOff && (
+              <button
+                onClick={flipCamera}
+                disabled={cameraBusy}
+                data-testid="group-call-flip-camera"
+                title={t('switchCamera')}
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-[#1A1A1A] tac-border hover:brightness-110 disabled:opacity-40"
+              >
+                <CameraRotate size={20} />
+              </button>
+            )}
+          </>
         )}
         <button onClick={end} data-testid="group-call-end" className="w-14 h-14 rounded-full bg-[#FF3B30] flex items-center justify-center hover:brightness-110">
           <Phone size={22} weight="fill" className="rotate-[135deg] text-white" />

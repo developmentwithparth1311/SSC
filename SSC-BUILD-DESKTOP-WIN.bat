@@ -13,5 +13,9 @@ set CSC_IDENTITY_AUTO_DISCOVERY=false
 call yarn build:win
 if errorlevel 1 exit /b 1
 echo.
-echo DONE: frontend\desktop\dist\SSC-Setup-1.0.5.exe
+if not exist "C:\Users\smash\Desktop\SSC" mkdir "C:\Users\smash\Desktop\SSC"
+copy /Y dist\SSC-Setup-1.0.6.exe C:\Users\smash\Desktop\SSC\SSC-Setup-1.0.6.exe
+echo.
+echo DONE: frontend\desktop\dist\SSC-Setup-1.0.6.exe
+echo       C:\Users\smash\Desktop\SSC\SSC-Setup-1.0.6.exe
 endlocal

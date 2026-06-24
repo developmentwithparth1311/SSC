@@ -17,6 +17,7 @@ import OnboardingCoach, { hasCompletedOnboarding } from '../components/Onboardin
 import Avatar from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CreateGroupModal from '../components/CreateGroupModal';
+import ConversationActionsSheet, { ConversationListRow } from '../components/ConversationActionsSheet';
 import { useLocale } from '../context/LocaleContext';
 import { useMobileLayout } from '../lib/use-mobile';
 import MobileChatMenu, { MenuAction } from '../components/MobileChatMenu';
@@ -107,6 +108,7 @@ export default function ChatHome() {
   const [groupOpen, setGroupOpen] = useState(false);
   const [storyGroup, setStoryGroup] = useState(null);
   const [groupCallState, setGroupCallState] = useState(null); // {mode, direction, members, signal}
+  const [convActionsTarget, setConvActionsTarget] = useState(null);
   const [reads, setReads] = useState([]); // [{user_id, last_read_message_id}]
   const socketRef = useRef(null);
   const scrollRef = useRef(null);
@@ -380,6 +382,25 @@ export default function ChatHome() {
   }, [goToConversation, user?.user_id]);
 
   useEffect(() => {
+    const onCallEnded = () => {
+      stopIncomingRingtone();
+      setCallState(null);
+      setGroupCallState(null);
+    };
+    window.addEventListener('ssc-call-ended', onCallEnded);
+    return () => window.removeEventListener('ssc-call-ended', onCallEnded);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.user_id || !activeId || !activeConv) return;
+    (async () => {
+      if (!isGroup && peer?.user_id) {
+        await ensureSignalSession(peer.user_id, user.user_id).catch(() => {});
+      }
+    })();
+  }, [user?.user_id, activeId, activeConv, isGroup, peer?.user_id]);
+
+  useEffect(() => {
     const raw = sessionStorage.getItem(PENDING_CALL_KEY);
     if (raw) {
       sessionStorage.removeItem(PENDING_CALL_KEY);
@@ -501,6 +522,18 @@ export default function ChatHome() {
 
   const removeContact = (uid) => {
     setConfirmRemoveUid(uid);
+  };
+
+  const deleteConversation = async (conv) => {
+    if (!conv?.conversation_id) return;
+    try {
+      await api.delete(`/conversations/${conv.conversation_id}`);
+      await loadConversations();
+      if (activeId === conv.conversation_id) leaveChat();
+      toast.success(conv.is_group ? t('leftGroup') : t('chatDeleted'));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotDeleteChat'));
+    }
   };
 
   const confirmRemoveContact = async () => {
@@ -739,6 +772,9 @@ export default function ChatHome() {
       return;
     }
     try {
+      if (!isGroup && peer?.user_id && user?.user_id) {
+        await ensureSignalSession(peer.user_id, user.user_id).catch(() => {});
+      }
       const useSignal = await shouldSendWithSignal({
         isGroup,
         peer,
@@ -1111,31 +1147,34 @@ export default function ChatHome() {
           {sidebarConversations.map((c) => {
             const peerMuted = !c.is_group && isPeerMuted(c.peer?.user_id, myContacts);
             return (
-            <button key={c.conversation_id}
-              data-testid={`conversation-${c.conversation_id}`}
-              onClick={() => goToConversation(c.conversation_id)}
-              className={`w-full text-left px-4 py-3 border-b border-[#27272A] flex items-center gap-3 hover:bg-[#1A1A1A] transition ${activeId === c.conversation_id ? 'bg-[#1A1A1A]' : ''}`}>
-              <Avatar
-                user={c.is_group ? null : c.peer}
-                isGroup={c.is_group}
-                size="md"
-                showOnline={!c.is_group}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium truncate">
-                    {c.is_group ? (formatGroupConversationLabel(c) || t('group')) : `@${c.peer?.username}`}
-                    {peerMuted && <span className="text-[#A1A1AA] font-mono text-[10px] ml-1">· {t('muted')}</span>}
-                  </span>
-                  <span className="text-[10px] font-mono text-[#A1A1AA]">
-                    {c.is_group ? `${c.participants.length}P` : c.peer?.language?.toUpperCase()}
-                  </span>
+              <ConversationListRow
+                key={c.conversation_id}
+                conversation={c}
+                activeId={activeId}
+                onSelect={goToConversation}
+                onOpenActions={setConvActionsTarget}
+              >
+                <Avatar
+                  user={c.is_group ? null : c.peer}
+                  isGroup={c.is_group}
+                  size="md"
+                  showOnline={!c.is_group}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium truncate">
+                      {c.is_group ? (formatGroupConversationLabel(c) || t('group')) : `@${c.peer?.username}`}
+                      {peerMuted && <span className="text-[#A1A1AA] font-mono text-[10px] ml-1">· {t('muted')}</span>}
+                    </span>
+                    <span className="text-[10px] font-mono text-[#A1A1AA]">
+                      {c.is_group ? `${c.participants.length}P` : c.peer?.language?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#A1A1AA] truncate font-mono">
+                    {c.last_activity?.has_messages ? `· ${t('encryptedMessage')} ·` : t('noMessagesYet')}
+                  </div>
                 </div>
-                <div className="text-[11px] text-[#A1A1AA] truncate font-mono">
-                  {c.last_activity?.has_messages ? `· ${t('encryptedMessage')} ·` : t('noMessagesYet')}
-                </div>
-              </div>
-            </button>
+              </ConversationListRow>
             );
           })}
         </div>
@@ -1493,8 +1532,26 @@ export default function ChatHome() {
         onCreated={(c) => { loadConversations(); goToConversation(c.conversation_id); }}
       />
 
+      <ConversationActionsSheet
+        open={!!convActionsTarget}
+        conversation={convActionsTarget}
+        contact={convActionsTarget && !convActionsTarget.is_group
+          ? myContacts.find((x) => x.user_id === convActionsTarget.peer?.user_id)
+          : null}
+        onClose={() => setConvActionsTarget(null)}
+        onMute={toggleMute}
+        onBlock={toggleBlock}
+        onDelete={deleteConversation}
+      />
+
       {storyGroup && (
-        <StoryViewer group={storyGroup} me={user} privateKey={privateKey} onClose={() => setStoryGroup(null)} />
+        <StoryViewer
+          group={storyGroup}
+          me={user}
+          privateKey={privateKey}
+          onDeleted={storyGroup.onDeleted}
+          onClose={() => setStoryGroup(null)}
+        />
       )}
       {groupCallState && groupCallState.direction === 'incoming' && (
         <div

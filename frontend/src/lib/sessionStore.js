@@ -39,10 +39,10 @@ export async function bootstrapSessionFromDevice() {
   return nativeMemoryToken;
 }
 
-export function persistSessionToken(token) {
+export async function persistSessionToken(token) {
   if (!token || usesCookieAuth()) return;
   nativeMemoryToken = token;
-  void persistNativeSession(token);
+  await persistNativeSession(token);
 }
 
 export function getSessionToken() {

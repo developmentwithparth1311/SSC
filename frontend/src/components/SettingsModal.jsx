@@ -43,7 +43,6 @@ export default function SettingsModal({ open, onClose }) {
   const { user, refreshUser } = useAuth();
   const { t, setLocale } = useLocale();
   const [language, setLanguage] = useState(user?.language || 'en');
-  const [username, setUsername] = useState(user?.username || '');
   const [busy, setBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [twoFAOpen, setTwoFAOpen] = useState(false);
@@ -52,7 +51,6 @@ export default function SettingsModal({ open, onClose }) {
   useEffect(() => {
     if (open && user) {
       setLanguage(user.language || 'en');
-      setUsername(user.username || '');
     }
   }, [open, user]);
 
@@ -61,7 +59,6 @@ export default function SettingsModal({ open, onClose }) {
     try {
       const payload = {};
       if (language !== (user?.language || 'en')) payload.language = language;
-      if (username.trim() && username !== user?.username) payload.username = username.trim();
       if (Object.keys(payload).length === 0) {
         onClose?.();
         return;
@@ -116,7 +113,7 @@ export default function SettingsModal({ open, onClose }) {
   if (!open) return null;
 
   const messagesProtected = userHasUnifiedIdentity(user);
-  const profileDirty = language !== (user?.language || 'en') || username.trim() !== (user?.username || '');
+  const profileDirty = language !== (user?.language || 'en');
 
   return (
     <>
@@ -173,12 +170,13 @@ export default function SettingsModal({ open, onClose }) {
               <label className="block mt-3 text-[10px] font-mono text-[#A1A1AA] uppercase tracking-wider">
                 {t('username')}
               </label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 12))}
-                className="w-full mt-1 px-3 py-2.5 text-sm bg-[#1A1A1A] border border-[#27272A] rounded-md"
-                data-testid="settings-username-input"
-              />
+              <div
+                className="w-full mt-1 px-3 py-2.5 text-sm bg-[#1A1A1A] border border-[#27272A] rounded-md font-mono text-[#F0F0F0]"
+                data-testid="settings-username-display"
+              >
+                @{user?.username || '—'}
+              </div>
+              <p className="mt-1 text-[10px] font-mono text-[#71717A]">{t('settingsUsernameLocked')}</p>
             </Section>
 
             <Section icon={ShieldCheck} title={t('settingsSecurity')} testId="settings-security-section">

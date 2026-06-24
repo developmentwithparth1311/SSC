@@ -18,7 +18,7 @@ import Avatar from './Avatar';
  * Stories bar: horizontal scroll at top of sidebar with avatars.
  * Click "+" to create a status; click an avatar to view their 24h stories.
  */
-export function StoriesBar({ me, privateKey, onView }) {
+export function StoriesBar({ me, privateKey, onView, onStatusesChange }) {
   const [statuses, setStatuses] = useState([]);
   const [creatorOpen, setCreatorOpen] = useState(false);
 
@@ -26,7 +26,16 @@ export function StoriesBar({ me, privateKey, onView }) {
     try {
       const { data } = await api.get('/statuses');
       setStatuses(data);
+      onStatusesChange?.(data);
     } catch {}
+  };
+
+  const removeStatus = (statusId) => {
+    setStatuses((cur) => {
+      const next = cur.filter((s) => s.status_id !== statusId);
+      onStatusesChange?.(next);
+      return next;
+    });
   };
   useEffect(() => { reload(); }, []);
 
@@ -34,7 +43,11 @@ export function StoriesBar({ me, privateKey, onView }) {
   useEffect(() => {
     const h = () => reload();
     window.addEventListener('ssc-status-new', h);
-    return () => window.removeEventListener('ssc-status-new', h);
+    window.addEventListener('ssc-status-viewed', h);
+    return () => {
+      window.removeEventListener('ssc-status-new', h);
+      window.removeEventListener('ssc-status-viewed', h);
+    };
   }, []);
 
   // group by author
@@ -59,7 +72,7 @@ export function StoriesBar({ me, privateKey, onView }) {
             <span className="text-[9px] font-mono text-[#A1A1AA] tracking-wider">ADD</span>
           </button>
           {ordered.map((g) => (
-            <button key={g.author_id} onClick={() => onView && onView(g)} data-testid={`story-${g.author_username}`}
+            <button key={g.author_id} onClick={() => onView && onView({ ...g, onDeleted: removeStatus })} data-testid={`story-${g.author_username}`}
               className="flex flex-col items-center gap-1 group">
               <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#00E5FF] via-[#FFD600] to-[#34C759]">
                 <div className="w-full h-full rounded-full bg-[#0A0A0A] overflow-hidden flex items-center justify-center">
@@ -179,13 +192,18 @@ function StoryCreator({ open, onClose, me, onCreated }) {
 }
 
 // ─── Viewer ──────────────────────────────────────────────────────────────────
-export function StoryViewer({ group, onClose, me, privateKey }) {
+export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
   const [idx, setIdx] = useState(0);
   const [decoded, setDecoded] = useState('');
   const [progress, setProgress] = useState(0);
+  const [viewersCount, setViewersCount] = useState(0);
   const timerRef = useRef(null);
 
   const cur = group?.items?.[idx];
+
+  useEffect(() => {
+    setViewersCount(cur?.viewers?.length || 0);
+  }, [cur?.status_id, cur?.viewers?.length]);
 
   useEffect(() => subscribeMemoryWipe(() => {
     setDecoded('');
@@ -196,8 +214,12 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
 
   useEffect(() => {
     if (!cur) return;
-    if (!isSignalStatusV1(cur) && !privateKey) return;
+    if (!isSignalStatusV1(cur) && !privateKey) {
+      setDecoded('[encrypted — reopen app to unlock]');
+      return;
+    }
     setDecoded('decrypting…');
+    let cancelled = false;
     (async () => {
       try {
         let pt;
@@ -205,14 +227,18 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
           pt = await decryptStatusText(cur.author_id, cur);
         } else {
           const key = cur.encrypted_keys?.[me.user_id];
-          if (!key) { setDecoded('[no key for this device]'); return; }
+          if (!key) { if (!cancelled) setDecoded('[no key for this device]'); return; }
           pt = await decryptMessage(privateKey, cur.ciphertext, cur.iv, key);
         }
-        setDecoded(pt);
-        // mark viewed
-        try { await api.post('/statuses/viewed', { status_id: cur.status_id }); } catch {}
+        if (!cancelled) setDecoded(pt || '');
+        if (cur.author_id !== me?.user_id) {
+          try {
+            await api.post('/statuses/viewed', { status_id: cur.status_id });
+            window.dispatchEvent(new Event('ssc-status-viewed'));
+          } catch {}
+        }
       } catch (e) {
-        setDecoded('[unable to decrypt]');
+        if (!cancelled) setDecoded('[unable to decrypt]');
       }
     })();
     // auto-advance after 6s
@@ -226,9 +252,24 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
         next();
       }
     }, 50);
-    return () => timerRef.current && clearInterval(timerRef.current);
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cur, privateKey]);
+  }, [cur, privateKey, me?.user_id]);
+
+  useEffect(() => {
+    if (!cur || cur.author_id !== me?.user_id) return undefined;
+    const poll = setInterval(async () => {
+      try {
+        const { data } = await api.get('/statuses');
+        const match = data.find((s) => s.status_id === cur.status_id);
+        if (match) setViewersCount(match.viewers?.length || 0);
+      } catch {}
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [cur?.status_id, cur?.author_id, me?.user_id]);
 
   const next = () => {
     if (!group) return;
@@ -242,9 +283,13 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
     if (!window.confirm('Delete this status?')) return;
     try {
       await api.delete(`/statuses/${cur.status_id}`);
+      onDeleted?.(cur.status_id);
+      group.onDeleted?.(cur.status_id);
       toast.success('Deleted');
       onClose && onClose();
-    } catch {}
+    } catch {
+      toast.error('Could not delete status');
+    }
   };
 
   if (!group || !cur) return null;
@@ -278,7 +323,7 @@ export function StoryViewer({ group, onClose, me, privateKey }) {
 
         {cur.author_id === me?.user_id && (
           <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 text-[10px] font-mono text-white/70 tracking-widest" data-testid="story-viewers-count">
-            <Eye size={12} /> {cur.viewers?.length || 0} VIEWED
+            <Eye size={12} /> {viewersCount} VIEWED
           </div>
         )}
       </div>

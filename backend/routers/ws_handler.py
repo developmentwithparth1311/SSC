@@ -9,7 +9,7 @@ from core.ws_tickets import consume_ws_ticket
 from core.contact_helpers import are_contacts, has_shared_conv
 from core.database import db
 from core.logging_config import logger
-from core.push_helpers import send_push_for_call
+from core.push_helpers import send_push_for_call, send_push_for_call_end
 from core.realtime import broadcast_to_conversation, manager
 from core.utils import iso, now_utc
 from core.webrtc_signaling_policy import SignalingValidationError, validate_signaling_relay
@@ -84,6 +84,8 @@ def register_websocket(app):
                                 mode = data.get("mode", "audio")
                                 conv_id = data.get("conversation_id")
                                 asyncio.create_task(send_push_for_call(to_user, user, mode, conv_id, group))
+                            elif t in ("call-end", "call-reject"):
+                                asyncio.create_task(send_push_for_call_end(to_user, user))
                         else:
                             logger.warning(f"WS call blocked: no permission between {user_id} and {to_user}")
                     if data.get("group") and data.get("members"):

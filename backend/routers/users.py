@@ -34,13 +34,8 @@ def _validate_image_bytes(data: bytes, content_type: str) -> str:
 @router.patch("/me")
 async def update_me(body: UpdateProfileIn, current=Depends(get_current_user)):
     update = {}
-    if body.username:
-        err = validate_username(body.username)
-        if err:
-            raise HTTPException(400, err)
-        if await db.users.find_one({"username": body.username, "user_id": {"$ne": current["user_id"]}}):
-            raise HTTPException(409, "Username already taken")
-        update["username"] = body.username
+    if body.username and body.username.strip() != (current.get("username") or ""):
+        raise HTTPException(403, "Username cannot be changed after registration")
     if body.language:
         update["language"] = body.language
     if update:

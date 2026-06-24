@@ -90,10 +90,29 @@ async def send_push_for_message(conv: dict, sender: dict, msg: dict):
     )
     await send_push(recipients, payload, sender["user_id"])
 
+async def send_push_for_call_end(to_user: str, from_user: dict):
+    """Silent native push so background clients stop ringing when the caller hangs up."""
+    if db is None or not to_user:
+        return
+    payload = build_generic_push(
+        ACTIVITY_CALL,
+        tag=f"call-end-{to_user}",
+        extra_data={
+            "type": "call-end",
+            "from": from_user.get("user_id"),
+        },
+        silent=True,
+    )
+    try:
+        import native_push as np
+        if np.is_configured():
+            await np.send_native_to_users([to_user], payload, from_user.get("user_id"))
+    except Exception as e:
+        _logger.warning(f"native call-end push failed: {type(e).__name__}")
+
+
 async def send_push_for_call(to_user: str, from_user: dict, mode: str = "audio", conv_id: str = None, group: bool = False):
     if db is None or manager is None:
-        return
-    if to_user in manager.user_sockets:
         return
     payload = build_generic_push(
         ACTIVITY_CALL,
@@ -106,7 +125,16 @@ async def send_push_for_call(to_user: str, from_user: dict, mode: str = "audio",
         },
         vibrate=[200, 100, 200],
     )
-    await send_push([to_user], payload, from_user.get("user_id"))
+    # Always deliver native call alerts — WS may be alive while the app is backgrounded.
+    try:
+        import native_push as np
+        if np.is_configured():
+            await np.send_native_to_users([to_user], payload, from_user.get("user_id"))
+            return
+    except Exception as e:
+        _logger.warning(f"native call push failed: {type(e).__name__}")
+    if to_user not in manager.user_sockets:
+        await send_push([to_user], payload, from_user.get("user_id"))
 
 async def send_push_for_friend_request(to_user_id: str, from_user: dict):
     if db is None or manager is None:

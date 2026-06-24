@@ -35,8 +35,7 @@ describe('sessionStore', () => {
   });
 
   it('clearSessionToken removes memory and device wrap', async () => {
-    persistSessionToken('jwt-clear');
-    await new Promise((r) => setTimeout(r, 20));
+    await persistSessionToken('jwt-clear');
     expect(getSessionToken()).toBe('jwt-clear');
     clearSessionToken();
     expect(getSessionToken()).toBeNull();
