@@ -1,6 +1,6 @@
 {
   "name": "ssc-desktop",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "SSC desktop client — Windows + Mac with libsignal",
   "private": true,
   "type": "module",
@@ -23,6 +23,12 @@
   "build": {
     "appId": "chat.ssc.secure.desktop",
     "productName": "SSC",
+    "protocols": [
+      {
+        "name": "SSC OAuth",
+        "schemes": ["chat.ssc.secure.desktop"]
+      }
+    ],
     "copyright": "Copyright © 2026 SSC contributors",
     "directories": {
       "output": "dist",

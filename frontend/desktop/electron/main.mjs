@@ -16,8 +16,12 @@ function rendererIndex() {
   return path.join(process.resourcesPath, 'renderer', 'index.html');
 }
 
+function isDesktopAuthUrl(url) {
+  return typeof url === 'string' && url.startsWith(`${DESKTOP_AUTH_SCHEME}://`);
+}
+
 function routeAuthDeepLink(url) {
-  if (!url || !url.startsWith(`${DESKTOP_AUTH_SCHEME}://`)) return false;
+  if (!isDesktopAuthUrl(url)) return false;
   try {
     const parsed = new URL(url);
     const authPath = parsed.pathname || '/auth/google';
@@ -33,6 +37,17 @@ function routeAuthDeepLink(url) {
   } catch {
     return false;
   }
+}
+
+/** OAuth leaves file:// for Google — intercept custom-scheme return inside the same window. */
+function attachOAuthNavigationGuards(win) {
+  const intercept = (event, url) => {
+    if (!isDesktopAuthUrl(url)) return;
+    event.preventDefault();
+    routeAuthDeepLink(url);
+  };
+  win.webContents.on('will-navigate', intercept);
+  win.webContents.on('will-redirect', intercept);
 }
 
 function createWindow() {
@@ -66,6 +81,8 @@ function createWindow() {
   } else {
     mainWindow.loadFile(rendererIndex());
   }
+
+  attachOAuthNavigationGuards(mainWindow);
 
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
