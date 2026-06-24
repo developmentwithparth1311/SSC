@@ -50,7 +50,10 @@ def test_prekey_fields_never_include_secrets():
 
 def test_engine8_steps_all_done():
     done = [step for step, _, flag in ENGINE8_STEPS if flag]
-    assert done == ["8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8"]
+    assert done == [
+        "8.1", "8.2", "8.3", "8.4", "8.5", "8.6", "8.7", "8.8",
+        "8.9", "8.11", "8.12",
+    ]
 
 
 def test_engine8_complete():

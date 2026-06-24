@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-23 (Engine 9 shipped · `yarn cap:sync` rebuild done)
+**Updated:** 2026-06-24 (test drift fixed · automated smoke green · all gates pass)
 **Repo:** `C:\Users\smash\SSC-main`  
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -9,7 +9,7 @@
 
 ---
 
-## Live infrastructure (verified 23 Jun 2026)
+## Live infrastructure (verified 24 Jun 2026)
 
 | Service | URL / status | Notes |
 |---------|----------------|-------|
@@ -19,7 +19,7 @@
 | **Redis** | Upstash (production) | Required for `ENV=production` |
 | **APK API URL** | Cloud Run (baked in build) | `frontend/.env.production.local` |
 | **Google OAuth** | ✅ Configured | Web client + Cloud Run redirect URI in `cloud_run.env` |
-| **LAN dev** | Optional | Founder laptop only — never give LAN IP to testers |
+| **LAN dev** | ✅ Docker mongo + redis + local backend | Founder laptop only — never give LAN IP to testers |
 
 ---
 
@@ -144,7 +144,7 @@ Details: `memory/SECURITY_MODEL.md`
 | Mode | Use |
 |------|-----|
 | LAN / localhost | Founder laptop only |
-| **Firebase App Tester** | Real testers — production API URL in APK |
+| **Firebase App Distribution** | Real testers — production API URL in APK |
 | **Cloud Run HTTPS** | `https://ssc-api-4jp3wuccwa-ew.a.run.app` |
 | LAN IP | **Never** give to testers |
 
@@ -164,7 +164,8 @@ cd C:\Users\smash\SSC-main\backend
 - [x] APK bakes Cloud Run URL (`yarn cap:sync` / `SSC-BUILD-APK.bat`)
 - [ ] Custom domain + Turnstile (~28 Jun)
 - [ ] Sync PRD intro text (still says RSA-only — see `memory/PRD.md` header note)
-- [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual)
+- [x] Automated smoke: `e2e_smoke.py` + Engine 1–5/8/9 gates + production `/api/health` (24 Jun 2026)
+- [ ] Two-phone smoke: Signal chat + call + on-device translate (founder manual — APK on device)
 
 ### P1 — Product / security
 - [x] Engine 8.9: Signal attachments (1:1 Android)
@@ -189,13 +190,17 @@ cd C:\Users\smash\SSC-main\backend
 
 ---
 
-## Test health
+## Test health (verified 24 Jun 2026)
 
 | Metric | Value |
 |--------|-------|
-| pytest collected | **462+** |
-| Engine 8 gate | 50 unit + 10 integration + proof (through 8.12) |
-| Engine 9 gate | translation guard + policy + proof |
+| pytest collected | **477** |
+| pytest result | **476 passed**, 1 skipped, 0 failed |
+| Engine 1–5 gates | **PASS** |
+| Engine 8 gate | **PASS** (54 unit + 10 integration + proof through 8.12) |
+| Engine 9 gate | **PASS** |
+| `e2e_smoke.py` | **PASS** (health, contacts, messages, files, statuses, panic wipe) |
+| Production `/api/health` | **PASS** (`env=production`, mongo + redis ok) |
 | Frontend tests | 0 |
 
 ---
@@ -215,3 +220,6 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-23 | Cloud Run production API live; OAuth on Cloud Run redirect |
 | 2026-06-23 | Engine 9 — on-device translation (ML Kit Android); M5 closed |
 | 2026-06-23 | `yarn cap:sync` rebuild — Engine 9 + Signal 8.9–8.13 baked into APK |
+| 2026-06-24 | Test drift fixed (3 policy assertions for 8.9–8.12 + Firebase App Distribution) |
+| 2026-06-24 | `e2e_smoke.py` panic-wipe check aligned with session revocation; smoke green |
+| 2026-06-24 | All Engine 1–5/8/9 gates pass; pytest 476/476 (1 skipped) |

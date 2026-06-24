@@ -9,7 +9,9 @@ from core.migration_policy import (
 
 
 def test_dual_read_protocols():
-    assert DUAL_READ_PROTOCOLS == frozenset({"legacy_rsa", "signal_v1"})
+    assert DUAL_READ_PROTOCOLS == frozenset({
+        "legacy_rsa", "signal_v1", "signal_group_v1", "signal_status_v1",
+    })
 
 
 def test_normalize_defaults_to_legacy():

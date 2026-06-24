@@ -144,9 +144,26 @@ def main():
     step("Panic wipe (user A)")
     r = requests.post(f"{API}/panic-wipe", headers=auth(token_a), timeout=15)
     assert r.status_code == 200 and r.json().get("ok")
+    assert r.json().get("wiped_conversations", 0) >= 1
     r2 = requests.get(f"{API}/conversations", headers=auth(token_a), timeout=15)
-    assert r2.status_code == 200 and r2.json() == []
-    ok("panic wipe")
+    if r2.status_code == 200:
+        assert r2.json() == []
+    else:
+        assert r2.status_code == 401, r2.text
+    r_login = requests.post(
+        f"{API}/auth/login",
+        json={"email": spec_a["email"], "password": spec_a["password"]},
+        headers={"X-Forwarded-For": IP},
+        timeout=15,
+    )
+    assert r_login.status_code == 200, r_login.text
+    new_token = r_login.json()["token"]
+    r3 = requests.get(f"{API}/conversations", headers=auth(new_token), timeout=15)
+    assert r3.status_code == 200 and r3.json() == [], r3.text
+    r4 = requests.get(f"{API}/contacts", headers=auth(new_token), timeout=15)
+    assert r4.status_code == 200
+    assert user_b["user_id"] in [c["user_id"] for c in r4.json()]
+    ok("panic wipe (session revoked, account + contacts preserved)")
 
     print("\nE2E SMOKE PASSED")
 

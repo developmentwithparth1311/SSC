@@ -47,7 +47,7 @@ def test_session_cookie_constants():
 
 
 def test_testing_strategy_locked():
-    assert "Firebase App Tester" in TESTING_STRATEGY["real_testers"]
+    assert "Firebase App Distribution" in TESTING_STRATEGY["real_testers"]
     assert "founder" in TESTING_STRATEGY["lan_localhost"].lower()
     assert "2026-06-28" in TESTING_STRATEGY["domain_https"]
 
