@@ -120,7 +120,7 @@ Details: `memory/SECURITY_MODEL.md`
 | PWA + Capacitor Android APK | ✅ |
 | Google OAuth (web + native) | ✅ configured |
 | Translation | ✅ On-device (Android ML Kit); server off by default |
-| iOS app | ⬜ Not started |
+| iOS app | ✅ Scaffolded (`frontend/ios/`) · build requires Mac + $99/yr |
 | Custom domain + Turnstile | ⬜ ~28 Jun 2026 |
 | Play Store public | ⬜ AGPL review + listing |
 | TURN self-host (off-LAN calls) | ⬜ Credentials exist; verify on phone |
@@ -184,7 +184,7 @@ cd C:\Users\smash\SSC-main\backend
 - [x] Engine 6 evaluation (push + own-metal — charter + gate; migration deferred)
 - [x] WebSocket Redis pub-sub (multi-worker — Redis fan-out + global online set)
 - [x] SFU Phase A — charter + `/api/config` + mesh cap enforcement (mediasoup deploy = Phase B)
-- [ ] iOS Capacitor ($99/yr)
+- [x] iOS Capacitor scaffold (`cap add ios` + charter; App Store build deferred — needs Mac)
 - [x] 2FA backup codes (10 codes on setup, login fallback, regenerate in UI)
 - [x] Invite links — **retired** (username search + friend requests sufficient)
 - [x] Frontend automated tests (`yarn test:ci` — 13 tests, 4 suites)
@@ -204,7 +204,7 @@ cd C:\Users\smash\SSC-main\backend
 | `e2e_smoke.py` | **PASS** (health, contacts, messages, files, statuses, panic wipe) |
 | Production `/api/health` | **PASS** (`env=production`, mongo + redis ok) |
 | WS fan-out | Redis pub-sub when `REDIS_URL` set · `ws_fanout` in `/api/health` |
-| Frontend tests | **13 passed** (`yarn test:ci` — i18n, presence, footprint, Landing) |
+| Frontend tests | **17 passed** (`yarn test:ci` — includes groupCalls) |
 
 ---
 
@@ -233,3 +233,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | Engine 6 evaluation — push/own-metal charter + policy gate (6.1–6.2) |
 | 2026-06-24 | WebSocket Redis pub-sub — multi-worker fan-out + push offline fix |
 | 2026-06-24 | SFU Phase A — mediasoup selected; config + mesh cap; deploy deferred |
+| 2026-06-24 | iOS Capacitor scaffold — `frontend/ios/` + IOS_CAPACITOR_CHARTER.md |
