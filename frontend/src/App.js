@@ -34,26 +34,45 @@ function Protected({ children }) {
   const { t } = useLocale();
   const location = useLocation();
   const [identityBoot, setIdentityBoot] = React.useState(isInstalledClient() ? 'pending' : 'done');
+  const [identityRetry, setIdentityRetry] = React.useState(0);
 
   React.useEffect(() => {
     if (!user || !isInstalledClient() || identityBoot !== 'pending') return;
     let cancelled = false;
-    bootstrapSignalIdentity(refreshUser).then((res) => {
+    bootstrapSignalIdentity(refreshUser).then(async (res) => {
       if (cancelled) return;
-      setIdentityBoot(res.ok ? 'done' : 'failed');
+      if (res.ok) {
+        const refreshed = await refreshUser();
+        const ready = userHasUnifiedIdentity(refreshed || user);
+        setIdentityBoot(ready ? 'done' : 'failed');
+        return;
+      }
+      setIdentityBoot('failed');
     });
     return () => { cancelled = true; };
-  }, [user, refreshUser, identityBoot]);
+  }, [user, refreshUser, identityBoot, identityRetry]);
+
+  const retrySignalIdentity = () => {
+    setIdentityBoot('pending');
+    setIdentityRetry((n) => n + 1);
+  };
 
   if (loading || identityBoot === 'pending') {
     return <div className="mobile-shell flex items-center justify-center bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs safe-top safe-bottom">{t('initializing')}</div>;
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!user.username || !user.public_key) return <Navigate to="/setup" replace />;
-  if (isInstalledClient() && !userHasUnifiedIdentity(user)) {
+  if (isInstalledClient() && (identityBoot === 'failed' || !userHasUnifiedIdentity(user))) {
     return (
-      <div className="mobile-shell flex items-center justify-center bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs p-6 text-center safe-top safe-bottom">
-        {t('signalIdentityRequired')}
+      <div className="mobile-shell flex flex-col items-center justify-center gap-4 bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs p-6 text-center safe-top safe-bottom">
+        <p>{t('signalIdentityRequired')}</p>
+        <button
+          type="button"
+          onClick={retrySignalIdentity}
+          className="px-4 py-2 rounded-md border border-[#27272A] text-[#F0F0F0] hover:bg-[#1A1A1A] transition text-sm"
+        >
+          {t('signalIdentityRetry')}
+        </button>
       </div>
     );
   }

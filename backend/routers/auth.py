@@ -6,7 +6,7 @@ from typing import Optional
 
 import pyotp
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from core.auth import (
     client_ip,
@@ -206,6 +206,16 @@ async def google_start(platform: str = "web"):
         raise HTTPException(501, "Google login not configured on server")
     plat = "native" if platform == "native" else "web"
     return RedirectResponse(authorization_url(plat))
+
+
+@router.get("/google/native-return")
+async def google_native_return(token: str = "", needs_setup: str = "0"):
+    """HTTPS bridge after Google OAuth — opens chat.ssc.secure:// deep link into the app."""
+    from core.google_auth import native_return_html
+
+    if not token:
+        raise HTTPException(400, "Missing token")
+    return HTMLResponse(native_return_html(token, needs_setup == "1"))
 
 
 @router.get("/google/callback")

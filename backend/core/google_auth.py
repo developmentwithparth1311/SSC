@@ -98,9 +98,69 @@ def exchange_code(code: str) -> dict:
     return r.json()
 
 
+def native_deep_link(token: str, needs_setup: bool) -> str:
+    """Custom scheme URL opened by the installed Android app."""
+    q = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
+    return f"{NATIVE_OAUTH_REDIRECT}/auth/google?{q}"
+
+
+def native_return_bridge_url(token: str, needs_setup: bool) -> str:
+    """HTTPS bridge — Chrome Custom Tabs fail on bare custom-scheme 302 redirects."""
+    if not GOOGLE_REDIRECT_URI or "/api/" not in GOOGLE_REDIRECT_URI:
+        return native_deep_link(token, needs_setup)
+    api_base = GOOGLE_REDIRECT_URI.rsplit("/api/", 1)[0]
+    q = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
+    return f"{api_base}/api/auth/google/native-return?{q}"
+
+
+def native_return_html(token: str, needs_setup: bool) -> str:
+    """Minimal page that hands off from the OAuth browser back into the app."""
+    import json
+
+    deep = native_deep_link(token, needs_setup)
+    query = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
+    intent = (
+        f"intent://app/auth/google?{query}"
+        "#Intent;scheme=chat.ssc.secure;package=chat.ssc.secure;end"
+    )
+    deep_js = json.dumps(deep)
+    intent_js = json.dumps(intent)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SSC</title>
+  <style>
+    body {{
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0A0A0A; color: #A1A1AA; font-family: system-ui, sans-serif; text-align: center;
+      padding: 24px;
+    }}
+    a {{ color: #00E5FF; }}
+  </style>
+</head>
+<body>
+  <div>
+    <p>Opening SSC…</p>
+    <p><a id="open-ssc" href="#">Tap here if the app does not open</a></p>
+  </div>
+  <script>
+    (function () {{
+      var deep = {deep_js};
+      var intent = {intent_js};
+      var link = document.getElementById('open-ssc');
+      link.href = deep;
+      try {{ window.location.replace(intent); }} catch (e) {{}}
+      setTimeout(function () {{ window.location.replace(deep); }}, 500);
+    }})();
+  </script>
+</body>
+</html>"""
+
+
 def frontend_redirect(platform: str, token: str, needs_setup: bool) -> str:
-    base = NATIVE_OAUTH_REDIRECT if platform == "native" else FRONTEND_OAUTH_REDIRECT
     flag = "1" if needs_setup else "0"
     if platform == "web":
-        return f"{base}/auth/google?needs_setup={flag}"
-    return f"{base}/auth/google?token={token}&needs_setup={flag}"
+        return f"{FRONTEND_OAUTH_REDIRECT}/auth/google?needs_setup={flag}"
+    return native_return_bridge_url(token, needs_setup)

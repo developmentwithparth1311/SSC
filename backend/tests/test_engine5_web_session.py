@@ -59,3 +59,13 @@ def test_google_native_redirect_keeps_token():
     url = frontend_redirect("native", "native_tok", True)
     assert "token=native_tok" in url
     assert "needs_setup=1" in url
+    assert "native-return" in url
+
+
+def test_google_native_return_html_opens_deep_link():
+    from core.google_auth import native_return_html
+
+    html = native_return_html("tok123", True)
+    assert "chat.ssc.secure://app/auth/google" in html
+    assert "tok123" in html
+    assert "intent://" in html

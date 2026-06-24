@@ -2,6 +2,7 @@ package chat.ssc.secure;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -13,9 +14,14 @@ import androidx.core.view.WindowCompat;
 
 import com.getcapacitor.BridgeActivity;
 
+import chat.ssc.secure.plugins.SscLibsignalPlugin;
+import chat.ssc.secure.plugins.SscTranslatePlugin;
+
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(SscLibsignalPlugin.class);
+        registerPlugin(SscTranslatePlugin.class);
         SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         applySystemBarColors();
@@ -31,6 +37,13 @@ public class MainActivity extends BridgeActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowCompat.getInsetsController(window, window.getDecorView()).setAppearanceLightNavigationBars(false);
         }
+    }
+
+    /** Required for OAuth deep links when launchMode=singleTask (app already running). */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
     }
 
     @Override

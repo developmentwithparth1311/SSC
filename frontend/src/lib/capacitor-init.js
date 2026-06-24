@@ -5,6 +5,7 @@ import { isNativeApp } from './platform';
 import { initNativePush } from './native-push';
 
 let splashHidden = false;
+let lastDeepLink = '';
 
 async function closeOAuthBrowser() {
   try {
@@ -15,24 +16,56 @@ async function closeOAuthBrowser() {
   }
 }
 
-function routeFromDeepLink(url) {
-  if (!url) return;
+function parseDeepLinkPath(url) {
+  if (!url) return null;
   try {
     const parsed = new URL(url);
-    const path = parsed.pathname || '/';
-    const target = path + parsed.search + parsed.hash;
-    if (
-      path.startsWith('/auth/google')
-      || path.startsWith('/chat')
-      || path.startsWith('/login')
-      || path.startsWith('/register')
-      || path.startsWith('/setup')
-    ) {
-      if (path.startsWith('/auth/google')) closeOAuthBrowser();
-      window.location.assign(target);
-    }
+    return {
+      path: parsed.pathname || '/',
+      search: parsed.search || '',
+      hash: parsed.hash || '',
+    };
   } catch {
-    /* ignore unknown deep links */
+    /* custom scheme fallback: chat.ssc.secure://app/auth/google?... */
+    const match = url.match(/^[^:]+:\/\/[^/]+(\/[^?#]*)/);
+    if (!match) return null;
+    const q = url.indexOf('?');
+    const h = url.indexOf('#');
+    let search = '';
+    let hash = '';
+    if (q >= 0) {
+      const end = h >= 0 ? h : url.length;
+      search = url.slice(q, end);
+    }
+    if (h >= 0) hash = url.slice(h);
+    return { path: match[1] || '/', search, hash };
+  }
+}
+
+function routeFromDeepLink(url) {
+  if (!url || url === lastDeepLink) return;
+  const parts = parseDeepLinkPath(url);
+  if (!parts) return;
+  const { path, search, hash } = parts;
+  const target = path + search + hash;
+  const routable = path.startsWith('/auth/google')
+    || path.startsWith('/chat')
+    || path.startsWith('/login')
+    || path.startsWith('/register')
+    || path.startsWith('/setup');
+  if (!routable) return;
+
+  lastDeepLink = url;
+  if (path.startsWith('/auth/google')) closeOAuthBrowser();
+  window.location.assign(target);
+}
+
+async function consumeLaunchUrl(App) {
+  try {
+    const launch = await App.getLaunchUrl();
+    if (launch?.url) routeFromDeepLink(launch.url);
+  } catch {
+    /* optional */
   }
 }
 
@@ -83,10 +116,13 @@ export async function initCapacitor() {
 
   try {
     const { App } = await import('@capacitor/app');
-    const launch = await App.getLaunchUrl();
-    if (launch?.url) routeFromDeepLink(launch.url);
+    await consumeLaunchUrl(App);
     await App.addListener('appUrlOpen', (event) => {
       routeFromDeepLink(event.url);
+    });
+    await App.addListener('appStateChange', async ({ isActive }) => {
+      if (!isActive) return;
+      await consumeLaunchUrl(App);
     });
   } catch {
     /* optional */

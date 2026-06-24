@@ -43,11 +43,13 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket  # 
 PRESERVE_USERNAMES = frozenset({"raul1988"})
 
 
-def is_tester_user(doc: dict) -> bool:
+def is_tester_user(doc: dict, *, extra_emails: frozenset[str] = frozenset()) -> bool:
     username = (doc.get("username") or "").lower()
     email = (doc.get("email") or "").lower()
     if username in PRESERVE_USERNAMES:
         return False
+    if email in extra_emails:
+        return True
     if username.startswith("e2e"):
         return True
     if username == "testfriend":
@@ -185,7 +187,7 @@ async def _detach_from_preserved(db, deleted_id: str, preserved_ids: list[str], 
     return detached
 
 
-async def run(*, dry_run: bool) -> int:
+async def run(*, dry_run: bool, extra_emails: frozenset[str]) -> int:
     client, db, grid_fs = _make_db()
     database_module.db = db
     database_module.grid_fs = grid_fs
@@ -196,8 +198,8 @@ async def run(*, dry_run: bool) -> int:
         {"_id": 0, "user_id": 1, "username": 1, "email": 1},
     ).to_list(50_000)
 
-    testers = [u for u in all_users if is_tester_user(u)]
-    preserved = [u for u in all_users if not is_tester_user(u)]
+    testers = [u for u in all_users if is_tester_user(u, extra_emails=extra_emails)]
+    preserved = [u for u in all_users if not is_tester_user(u, extra_emails=extra_emails)]
     preserved_ids = [u["user_id"] for u in preserved]
 
     if not testers:
@@ -235,8 +237,15 @@ async def run(*, dry_run: bool) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Remove disposable SSC tester accounts")
     parser.add_argument("--dry-run", action="store_true", help="List matches without deleting")
+    parser.add_argument(
+        "--email",
+        action="append",
+        default=[],
+        help="Also delete account(s) with this email (repeatable)",
+    )
     args = parser.parse_args()
-    raise SystemExit(asyncio.run(run(dry_run=args.dry_run)))
+    extra = frozenset(e.strip().lower() for e in args.email if e and e.strip())
+    raise SystemExit(asyncio.run(run(dry_run=args.dry_run, extra_emails=extra)))
 
 
 if __name__ == "__main__":
