@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (TASK F complete · TASK E · D · G · C · B · A)
+**Updated:** 2026-06-24 (v1.0.5 deploy · audit · rebuild · TASK A–F shipped)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -11,14 +11,14 @@
 
 ## How to use this doc
 
-1. **Done** — Engines 1–5, 8–10, 9 + production deploy + v1.0.4 builds (see §Foundation).
-2. **Next** — Pick a **TASK** below (A → J). Each has **subtasks** with checkboxes.
-3. **After each subtask** — Run tests, bump build if user-facing, check off here, founder retest on smashmaxxx ↔ dots.
-4. **Release gate** — TASK I (QA matrix) must be green before Firebase testers beyond founder.
+1. **Done** — Engines 1–5, 8–10, 9 + TASK A–F code + **v1.0.5 rebuild** (see §Foundation, §Release v1.0.5).
+2. **Next** — **Founder QA matrix (TASK J)** on smashmaxxx ↔ dots with v1.0.5 builds.
+3. **Then** — TASK H (UX polish) · TASK I (domain, Turnstile, TURN) when funded.
+4. **Release gate** — TASK J green before Firebase testers beyond founder.
 
-**Current builds:** APK v1.0.4 build 6 · Windows `SSC-Setup-1.0.4.exe` · API `ssc-api-00012-bbc`
-**Last task completed:** TASK F — Chat actions & groups
-**Next task:** Batch rebuild + founder QA (tasks A–F) · then TASK H / I per roadmap
+**Current builds:** APK **v1.0.5 build 7** · Windows **`SSC-Setup-1.0.5.exe`** · API **`ssc-api-00013-6dd`**
+**Last deploy:** 24 Jun 2026 — Cloud Run + APK + desktop rebuild after pre-deploy audit
+**Next task:** TASK J — founder QA matrix (all A–F items on real devices)
 
 ---
 
@@ -26,13 +26,13 @@
 
 | Service | URL / status | Notes |
 |---------|----------------|-------|
-| **Production API** | `https://ssc-api-4jp3wuccwa-ew.a.run.app` | Cloud Run · `env=production` · mongo ✅ · redis ✅ |
+| **Production API** | `https://ssc-api-4jp3wuccwa-ew.a.run.app` | Cloud Run **`ssc-api-00013-6dd`** · `env=production` · mongo ✅ · redis ✅ |
 | **Firebase project** | `super-chat-b0992` | App Distribution, FCM push, Hosting (`super-chat-b0992.web.app`) |
 | **MongoDB** | Atlas `ssc` cluster | Network: allow Cloud Run (0.0.0.0/0) |
 | **Redis** | Upstash (production) | Required for `ENV=production` |
 | **APK API URL** | Cloud Run (baked in build) | `frontend/.env.production.local` |
 | **Google OAuth** | ✅ Wired (phone + desktop) | Android `chat.ssc.secure://app` · desktop `chat.ssc.secure.desktop://` |
-| **Release builds** | v1.0.4 / build 6 | APK `Desktop\SSC\APK\SSC-app-release.apk` · Win `Desktop\SSC\Setup-1.0.4.exe` |
+| **Release builds** | **v1.0.5 / build 7** | APK `Desktop\SSC\APK\SSC-app-release.apk` · Win `Desktop\SSC\SSC-Setup-1.0.5.exe` |
 | **LAN dev** | ✅ Docker mongo + redis + local backend | Founder laptop only — never give LAN IP to testers |
 
 ---
@@ -71,15 +71,17 @@
 | Web/PWA as product | **Retired** — download landing only |
 | HIGH audit batch (OAuth, deep links, dev/prod) | ✅ `241ff6c` |
 
-### Test health (24 Jun 2026)
+### Test health (24 Jun 2026 — post-audit)
 
 | Metric | Value |
 |--------|-------|
-| pytest | **538 passed**, 1 skipped |
+| pytest | **544 passed**, 1 skipped (after test fixes) |
 | Engine 1–5, 8, 9, 10 gates | **PASS** |
 | Unified identity + contacts graph gates | **PASS** |
-| `e2e_smoke.py` + production `/api/health` | **PASS** |
+| Production `/api/health` | **PASS** (`mongo` ok · `redis` ok · `ws_fanout` redis) |
 | Frontend `yarn test:ci` | **67 passed** |
+| APK release build | **PASS** (v1.0.5 build 7) |
+| Desktop NSIS build | **PASS** (`SSC-Setup-1.0.5.exe`) |
 
 ---
 
@@ -93,6 +95,121 @@
 | **QR / safety numbers** | Not MVP for remote users (US ↔ UK). Hide VERIFY from default chat; optional advanced Settings later. |
 | **Email** | Google → `email_verified`, no extra link. Password register → confirmation link later (non-Google). |
 | **Surfaces** | Installed apps only: Android APK, Windows/Mac desktop. iOS deferred. |
+
+---
+
+## Release v1.0.5 — pre-deploy audit (24 Jun 2026)
+
+### Blockers found & fixed before deploy
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| `CreateGroupModal` referenced `useRef` without import → **crash on New Group** | CRITICAL | Removed dead `debRef` (`a119ce9`) |
+| `GET /contacts` hid blocked users (`are_contacts` false) → **unblock impossible, sidebar filter broken** | CRITICAL | List blocked roster entries when `blocked_by_me` (`contacts.py`) |
+| Stale policy tests (VERIFY UI, panic order, roadmap Engine 10) | MEDIUM | Tests aligned with TASK A |
+| Settings showed version **1.0.0** | MEDIUM | `REACT_APP_SSC_VERSION=1.0.5` in production env |
+| Block/mute no WS sync | MEDIUM | `contacts-changed` on block/mute endpoints |
+
+### Confirmed OK (scan)
+
+- No `setUnlockOpen` dead refs · API paths match frontend · Signal + RSA dual-read intact
+- TASK C WS contact events · TASK D permissions plugin registered · TASK E attachment pipeline wired
+- Panic orchestrator: client wipe **before** server call (correct order)
+- Production health: mongo + redis + redis WS fanout
+
+### Known issues still open (honest)
+
+| Issue | Impact |
+|-------|--------|
+| **Founder QA not run** on v1.0.5 | All A–F code is shipped but **unverified on smashmaxxx ↔ dots** |
+| **TURN not verified** off-LAN | Video/voice may fail on cellular ↔ Wi‑Fi (TASK I.3) |
+| **Kotlin/R8 metadata warnings** on APK build | Build succeeds; watch for runtime edge cases on older Android |
+| **No code signing** on Windows installer | SmartScreen will warn |
+| **iOS** | Not shipped (TASK K) |
+| **Dual RSA legacy path** still internal | Migration incomplete; installed clients use Signal |
+| **Dead components** | `VerifyHandshakeModal.jsx`, `EncryptionModeBadge.jsx` unused (kept for advanced Settings later) |
+| **eslint** | `ChatHome` back-handler missing deps (cosmetic) |
+| **Integration test** `test_ssc_iteration2` | Requires live API + test accounts; run manually |
+
+---
+
+## Health check — pure reality (24 Jun 2026)
+
+### Engineering health: **B+** (for a solo-founder MVP)
+
+| Layer | Grade | Notes |
+|-------|-------|-------|
+| Automated tests | **A-** | 544 backend + 67 frontend; integration tests need live API |
+| Security architecture | **A-** | Signal + retention + blind contacts graph; no third-party audit |
+| Production infra | **B** | Cloud Run + Atlas + Upstash works; single region; no TURN yet |
+| Client stability | **B-** | Builds pass; real-device QA pending |
+| UX polish | **C** | Functional, not WhatsApp-smooth |
+| Scale readiness | **D** | Fine for dozens of users; not millions |
+
+### vs big giants (% feature parity — honest)
+
+*Not “how good is crypto” — how close is the **product** a normal user would switch for.*
+
+| Competitor | Overall parity | Where SSC is stronger | Where SSC is far behind |
+|------------|----------------|----------------------|-------------------------|
+| **WhatsApp** | **~28%** | 24h retention default, panic wipe, blind server graph, no phone number required | Calls reliability, media polish, groups admin, iOS, scale, backup, stickers, channels, payments |
+| **Telegram** | **~18%** | E2E on installed clients, retention policy | Cloud sync, bots, channels, search, desktop feature depth, speed at scale |
+| **Signal** | **~42%** | Similar crypto story + retention + panic; contacts privacy seals | Call quality, UX maturity, safety numbers UX (hidden), iOS parity, audited reputation |
+| **Messenger** | **~15%** | Privacy posture | Everything social + scale |
+
+**SSC “privacy-first messaging core”** (installed Android + Windows, mutual contacts only): **~55–60%** of what Signal offers for daily 1:1 chat — **if** founder QA passes on v1.0.5.
+
+**Bottom line:** SSC is a **real encrypted messenger MVP**, not a giant killer. Competitive edge is **policy** (24h TTL, minimal metadata, panic, blind graph), not feature count.
+
+---
+
+## What’s done vs what’s left
+
+### Shipped in code (TASK A–F) — needs founder retest on v1.0.5
+
+| Task | Code | Founder device QA |
+|------|------|-------------------|
+| **A** Invisible security | ✅ | [ ] |
+| **B** Session persist | ✅ | [ ] |
+| **C** Live contacts / friend requests | ✅ | [ ] |
+| **D** Permissions + calls | ✅ | [ ] |
+| **E** Attachments / voice / images | ✅ | [ ] |
+| **F** Block / mute / groups | ✅ | [ ] |
+| **G** OAuth + Android back | ✅ | [ ] |
+
+### Not started / deferred
+
+| Task | Scope |
+|------|-------|
+| **H** UX polish (P1) | Contact picker, header z-index, Settings pro, Google-only error copy |
+| **I** Infra | Custom domain, Turnstile, TURN, Play Store |
+| **J** QA matrix | **← YOU ARE HERE** — run on smashmaxxx + dots |
+| **K** Deferred | iOS, SFU, own-metal, email confirm |
+
+---
+
+## Suggestions (straight talk)
+
+**Do now (before wider testers):**
+1. Run full **TASK J matrix** on v1.0.5 — this is the real gate.
+2. Test **cellular ↔ Wi‑Fi call** — if it fails, TURN is not optional for US↔UK.
+3. Do **not** recreate smashmaxxx/dots accounts until retention timer check (per policy).
+
+**Do soon (high ROI):**
+1. **TASK H.5** — Google-only email error (reduces support noise).
+2. **TASK H.3** — chat header menu z-index (Android annoyance).
+3. Remove or wire **dead VERIFY/badge components** — reduces confusion for future devs.
+4. **Code-sign** Windows installer when budget allows.
+
+**Consider removing / deferring:**
+1. **Group mesh video >4 people** — unreliable without SFU; cap at 4 until TASK K.
+2. **Server translation** — keep on-device only; aligns with privacy story.
+3. **Web/PWA product** — already retired; good, keep it dead.
+
+**Do not pretend:**
+1. SSC is production-ready for public launch — it is **founder + closed testers** ready after J passes.
+2. Calls match WhatsApp — they do not until TURN + QA prove otherwise.
+3. iOS “soon” — it is a multi-week project minimum.
 
 ---
 
@@ -262,10 +379,10 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | Contacts | Friend request live (send + accept) | TASK C | [x] code · [ ] founder retest |
 | Chat | 1:1 text real-time | — | [x] |
 | Chat | No vault / legacy / upgrade UI | TASK A | [x] code · [ ] founder retest |
-| Chat | Image + voice note + file | TASK E | [ ] |
-| Chat | Block + mute | TASK F | [ ] |
-| Groups | Create + name + message | TASK F | [ ] |
-| Calls | Voice + video duplex + ring | TASK D | [ ] |
+| Chat | Image + voice note + file | TASK E | [x] code · [ ] retest v1.0.5 |
+| Chat | Block + mute | TASK F | [x] code · [ ] retest v1.0.5 |
+| Groups | Create + name + message | TASK F | [x] code · [ ] retest v1.0.5 |
+| Calls | Voice + video duplex + ring | TASK D | [x] code · [ ] retest v1.0.5 |
 | Stories | Post + 24h expiry | — | [ ] |
 | Security | Panic wipe (data gone, account remains) | — | [ ] |
 | Security | 2FA enable + login | — | [ ] |
@@ -312,24 +429,24 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 
 Google OAuth · friend request (after restart) · 1:1 chat · PC→phone video (camera) · delete contact · Google avatar · partial Settings
 
-### Broken → mapped to tasks
+### Broken → mapped to tasks (code status after v1.0.5)
 
-| Issue | Task |
-|-------|------|
-| P0-1 Friend request not live | C ✅ (founder retest after rebuild) |
-| P0-2 Session lost on force-close | B ✅ (founder retest after rebuild) |
-| P0-3 Android mic/camera permissions | D |
-| P0-4 Calls one-way / no audio / no ring | D |
-| P0-5 Desktop voice note empty | E |
-| P0-6 Images not previewable | E |
-| P0-7 Block + mute broken on PC | F |
-| P0-8 Create group broken | F |
-| P0-9 OAuth window stays open | G ✅ (founder retest after rebuild) |
-| P0-10 Android back “folder” bug | G ✅ (founder retest after rebuild) |
-| P1-1 Legacy/upgrade banners | A |
-| P1-2 VERIFY/QR in chat | A |
-| P1-8 Vault prompt on re-login | A |
-| P1-3–P1-10 UX polish | H |
+| Issue | Task | Code | Retest v1.0.5 |
+|-------|------|------|---------------|
+| P0-1 Friend request not live | C | ✅ | [ ] |
+| P0-2 Session lost on force-close | B | ✅ | [ ] |
+| P0-3 Android mic/camera permissions | D | ✅ | [ ] |
+| P0-4 Calls one-way / no audio / no ring | D | ✅ | [ ] |
+| P0-5 Desktop voice note empty | E | ✅ | [ ] |
+| P0-6 Images not previewable | E | ✅ | [ ] |
+| P0-7 Block + mute broken on PC | F | ✅ | [ ] |
+| P0-8 Create group broken | F | ✅ | [ ] |
+| P0-9 OAuth window stays open | G | ✅ | [ ] |
+| P0-10 Android back “folder” bug | G | ✅ | [ ] |
+| P1-1 Legacy/upgrade banners | A | ✅ | [ ] |
+| P1-2 VERIFY/QR in chat | A | ✅ | [ ] |
+| P1-8 Vault prompt on re-login | A | ✅ | [ ] |
+| P1-3–P1-10 UX polish | H | — | open |
 
 ---
 
@@ -401,3 +518,8 @@ yarn test:ci
 | 2026-06-24 | **TASK B complete** — encrypted session persist; S3 gap closed; frontend 36 tests pass |
 | 2026-06-24 | **TASK C complete** — friend-request WS events + live roster refresh; frontend 38 tests |
 | 2026-06-24 | **TASK G complete** — OAuth Browser + Android back stack; frontend 43 tests |
+| 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
+| 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
+| 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
+| 2026-06-24 | **Pre-deploy audit** — block roster + group modal crash fixed |
+| 2026-06-24 | **v1.0.5 deploy** — API `ssc-api-00013-6dd` + APK build 7 + `SSC-Setup-1.0.5.exe` |
