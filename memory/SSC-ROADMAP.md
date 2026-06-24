@@ -27,7 +27,7 @@
 
 ```
 Engines 1–5 + 8 + 9  ✅ COMPLETE (gates pass)
-Engine 6             ⬜ PLANNED (push / own-metal)
+Engine 6             ✅ EVALUATION (6.1–6.2 done · 6.3 deferred post-investors)
 ```
 
 ### Engine 1 — Retention ✅
@@ -62,9 +62,12 @@ Engine 6             ⬜ PLANNED (push / own-metal)
 
 **Charter:** `memory/SIGNAL_PROTOCOL_CHARTER.md`
 
-### Engine 6 — Push / own-metal ⬜
-- [ ] Self-hosted push path evaluation
-- [ ] Own-metal Mongo option (deferred post-investors)
+### Engine 6 — Push / own-metal ✅ (evaluation)
+- [x] 6.1 Push path evaluation — keep FCM + VAPID; self-host deferred
+- [x] 6.2 Own-metal Mongo evaluation — keep Atlas; deferred post-investors
+- [ ] 6.3 Own-metal migration runbook (post-investors)
+
+**Charter:** `memory/ENGINE_6_CHARTER.md`
 
 ### Engine 9 — Translation privacy ✅
 - [x] 9.1 On-device translation policy + unified client
@@ -178,7 +181,7 @@ cd C:\Users\smash\SSC-main\backend
 - [ ] AGPL legal review
 
 ### P2 — Scale & polish
-- [ ] Engine 6 own-metal / push hardening
+- [x] Engine 6 evaluation (push + own-metal — charter + gate; migration deferred)
 - [ ] WebSocket Redis pub-sub (multi-worker)
 - [ ] SFU for group calls >6
 - [ ] iOS Capacitor ($99/yr)
@@ -226,3 +229,4 @@ cd C:\Users\smash\SSC-main\backend
 | 2026-06-24 | Invite links removed from codebase (username search + friend requests only) |
 | 2026-06-24 | PRD synced to current architecture (Signal Android, Engine 9, production deploy) |
 | 2026-06-24 | Frontend automated tests — 13 tests (i18n, presence, session footprint, Landing) |
+| 2026-06-24 | Engine 6 evaluation — push/own-metal charter + policy gate (6.1–6.2) |
