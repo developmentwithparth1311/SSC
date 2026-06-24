@@ -1,5 +1,6 @@
 import { webcrypto } from 'crypto';
 import { TextEncoder, TextDecoder } from 'util';
+import { DEVICE_WRAP_KEY } from '../deviceWrapCrypto';
 import {
   saveVaultCredential,
   loadVaultCredential,
@@ -26,6 +27,8 @@ describe('vaultCredentialStore', () => {
     await saveVaultCredential('user-1', 'secret-pass-123');
     const loaded = await loadVaultCredential('user-1');
     expect(loaded).toBe('secret-pass-123');
+    expect(localStorage.getItem('ssc_vault_wrap_user-1')).not.toContain('secret-pass-123');
+    expect(localStorage.getItem(DEVICE_WRAP_KEY)).toBeTruthy();
   });
 
   it('returns null when credential missing', async () => {

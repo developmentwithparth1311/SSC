@@ -52,9 +52,9 @@ Attacker has **physical access** to an **unlocked** SSC session (vault may or ma
 
 User chooses to sign out. Same memory wipe as panic for secrets; **may** retain non-sensitive preferences (`ssc_ui_lang`).
 
-### 3.3 Refresh / tab close
+### 3.3 Refresh / tab close / force-stop
 
-Private key already requires vault re-unlock (Engine 2.2). Engine 3 does not change refresh UX — only panic/logout wipe paths.
+Private key: memory only; TASK A auto-unlocks from device wrap. **JWT (TASK B):** `ssc_session_wrap_enc` survives force-close; cleared on logout/panic. Never plaintext `ssc_token`.
 
 ---
 
@@ -77,7 +77,10 @@ User holds PANIC 1.5s
 
 | Key / pattern | Tier | Panic | Logout | Step |
 |---------------|------|-------|--------|------|
-| `ssc_token` | Secret | Remove ✅ | Remove ✅ | — (Engine 5: move JWT) |
+| `ssc_token` | Secret | Remove ✅ | Remove ✅ | — (legacy; never written) |
+| `ssc_session_wrap_enc` | Secret | Remove ✅ | Remove ✅ | TASK B |
+| `ssc_device_wrap_secret` | Secret | Keep | Keep | device AES key |
+| `ssc_vault_wrap_*` | Secret | Remove ✅ | Remove ✅ | TASK A |
 | `ssc_native_push_token` | Session | Remove ✅ | Remove ✅ | — |
 | `ssc_verified_v2_*` | Session | Remove ✅ | Keep | ✅ 3.4 |
 | `ssc_ui_lang` | Preference | Keep | Keep | — |

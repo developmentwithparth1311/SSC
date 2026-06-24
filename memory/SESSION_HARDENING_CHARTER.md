@@ -131,9 +131,10 @@ Priority unchanged: `Authorization` header **or** `session_token` cookie → JWT
 
 ### 6.2 Native (Capacitor / App Tester APK)
 
-- Token held in `sessionStore` module (memory only)
+- Token held in `sessionStore` (memory at runtime) + `nativeSessionStore` (AES device wrap at rest)
 - `api.js`: `withCredentials: false`; Authorization from memory
-- Panic/logout: clear memory store (Engine 3 orchestrator)
+- Cold start: `bootstrapSessionFromDevice()` before `/auth/me`
+- Panic/logout: clear memory + encrypted wrap (Engine 3 orchestrator) — never plaintext `ssc_token`
 - **Build-time** `REACT_APP_BACKEND_URL` = production HTTPS API — never LAN IP in tester builds
 
 ### 6.3 Footprint (closes C8)
@@ -152,7 +153,7 @@ Priority unchanged: `Authorization` header **or** `session_token` cookie → JWT
 | C8 | JWT in localStorage | **High** | 5.3–5.5 |
 | S1 | Cookie never set on login | **High** | 5.2 |
 | S2 | Redis revocation optional in dev | **Medium** | 5.6 ✅ |
-| S3 | Native session lost on app kill | **Low** | Accepted — re-login |
+| S3 | Native session lost on app kill | **Low** | ✅ TASK B — encrypted persist |
 
 **Deferred (not Engine 5):** custom domain (~28 Jun), Turnstile widget, Android Keystore persistence.
 
@@ -189,9 +190,10 @@ Priority unchanged: `Authorization` header **or** `session_token` cookie → JWT
 
 | Control | Implementation |
 |---------|----------------|
-| `frontend/src/lib/sessionStore.js` | `nativeMemoryToken` only — no `localStorage` read/write for JWT |
+| `frontend/src/lib/sessionStore.js` | `nativeMemoryToken` — no plaintext JWT in `localStorage` |
+| `frontend/src/lib/nativeSessionStore.js` | `ssc_session_wrap_enc` — AES-GCM device wrap (TASK B) |
 | `frontend/src/lib/localStorageFootprint.js` | `ssc_token` in `LEGACY_JWT_PURGE_KEYS` only (never stored) |
-| Native tradeoff | App force-close → re-login (S3 accepted) |
+| Native persistence | Force-close → stay logged in; logout/panic clears wrap |
 
 ### Enforcement (Step 5.5)
 

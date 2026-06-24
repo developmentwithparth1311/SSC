@@ -1,9 +1,14 @@
 /**
- * Client session token storage — Engine 5.
+ * Client session token storage — Engine 5 + TASK B.
  * Web (5.3): HttpOnly cookie only — never localStorage.
- * Native (5.4): in-memory only — never localStorage; re-login after app kill.
+ * Native (5.4 + B): in-memory Bearer at runtime; encrypted wrap via nativeSessionStore.js.
  */
 import { isInstalledClient } from './platform';
+import {
+  clearNativeSession,
+  persistNativeSession,
+  restoreNativeSession,
+} from './nativeSessionStore';
 
 import { LEGACY_JWT_KEY } from './sessionConstants';
 
@@ -25,9 +30,19 @@ export function purgeLegacyWebJwtFromStorage() {
   purgeLegacyJwtFromStorage();
 }
 
+/** Restore encrypted session from device before first API call (cold start). */
+export async function bootstrapSessionFromDevice() {
+  if (usesCookieAuth()) return null;
+  if (nativeMemoryToken) return nativeMemoryToken;
+  const token = await restoreNativeSession();
+  if (token) nativeMemoryToken = token;
+  return nativeMemoryToken;
+}
+
 export function persistSessionToken(token) {
   if (!token || usesCookieAuth()) return;
   nativeMemoryToken = token;
+  void persistNativeSession(token);
 }
 
 export function getSessionToken() {
@@ -37,6 +52,7 @@ export function getSessionToken() {
 
 export function clearSessionToken() {
   nativeMemoryToken = null;
+  clearNativeSession();
   purgeLegacyJwtFromStorage();
 }
 

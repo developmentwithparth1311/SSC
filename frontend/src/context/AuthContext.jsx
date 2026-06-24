@@ -13,6 +13,7 @@ import {
 } from '../lib/clientFootprintOrchestrator';
 import { registerMemoryWipeHandler } from '../lib/memoryWipe';
 import {
+  bootstrapSessionFromDevice,
   clearSessionToken,
   persistSessionToken,
   purgeLegacyJwtFromStorage,
@@ -58,8 +59,12 @@ export function AuthProvider({ children }) {
       ensurePreKeysUploaded().catch(() => {});
       await tryAutoUnlockVault(data);
       return data;
-    } catch {
+    } catch (err) {
       setUser(null);
+      if (err?.response?.status === 401) {
+        clearSessionToken();
+        autoUnlockAttempted.current = null;
+      }
       return null;
     }
   }, [tryAutoUnlockVault]);
@@ -77,11 +82,12 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
-    refreshUser()
-      .then((data) => {
-        if (data) runSilentBootstrap();
-      })
-      .finally(() => setLoading(false));
+    (async () => {
+      await bootstrapSessionFromDevice();
+      const data = await refreshUser();
+      if (data) await runSilentBootstrap();
+      setLoading(false);
+    })();
   }, [refreshUser, runSilentBootstrap]);
 
   useEffect(() => {

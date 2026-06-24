@@ -19,6 +19,17 @@ def test_session_store_native_memory_only():
     assert "localStorage.getItem" not in text
     assert "hasNativeSessionToken" in text
     assert "purgeLegacyJwtFromStorage" in text
+    assert "bootstrapSessionFromDevice" in text
+
+
+def test_native_session_store_encrypted_persistence():
+    path = FRONTEND / "lib" / "nativeSessionStore.js"
+    assert path.is_file()
+    text = path.read_text(encoding="utf-8")
+    assert "NATIVE_SESSION_WRAP_KEY" in text
+    assert "wrapDeviceSecret" in text
+    assert "localStorage.setItem('ssc_token'" not in text
+    assert "localStorage.getItem('ssc_token'" not in text
 
 
 def test_local_storage_footprint_jwt_purge_only():

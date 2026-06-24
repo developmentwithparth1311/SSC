@@ -75,10 +75,10 @@ SESSION_SURFACES: Dict[str, SessionSurface] = {
     "native_memory_jwt": SessionSurface(
         surface_id="native_memory_jwt",
         platform=SessionPlatform.NATIVE,
-        storage="sessionStore (React memory)",
+        storage="sessionStore (React memory) + nativeSessionStore (AES device wrap)",
         engine5_step="5.4",
-        target="Bearer from memory; never localStorage",
-        notes="App restart requires re-login — accepted tradeoff.",
+        target="Bearer from memory at runtime; encrypted wrap at rest — never plaintext ssc_token",
+        notes="TASK B: survive force-close; cleared on logout/panic.",
     ),
     "ws_ticket": SessionSurface(
         surface_id="ws_ticket",
@@ -102,7 +102,7 @@ SESSION_GAPS: List[SessionGap] = [
     SessionGap("S2", "Redis revocation optional in development", GapSeverity.MEDIUM, "5.6", resolved=True),
     SessionGap(
         "S3", "Native session lost on app force-close", GapSeverity.LOW, "5.4",
-        resolved=False,
+        resolved=True,
     ),
 ]
 

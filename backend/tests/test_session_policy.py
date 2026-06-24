@@ -37,6 +37,12 @@ def test_engine5_gap_s2_resolved():
     assert s2.resolved is True
 
 
+def test_engine5_gap_s3_resolved():
+    from core.session_policy import SESSION_GAPS
+    s3 = next(g for g in SESSION_GAPS if g.gap_id == "S3")
+    assert s3.resolved is True
+
+
 def test_engine5_fully_complete():
     assert engine5_complete() is True
 

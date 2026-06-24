@@ -1,0 +1,31 @@
+/**
+ * Native session persistence — TASK B (Engine 5 extension).
+ * JWT held in memory at runtime; encrypted device wrap at rest (never plaintext ssc_token).
+ */
+import { isInstalledClient } from './platform';
+import { wrapDeviceSecret, unwrapDeviceSecret } from './deviceWrapCrypto';
+
+export const NATIVE_SESSION_WRAP_KEY = 'ssc_session_wrap_enc';
+
+export async function persistNativeSession(token) {
+  if (!isInstalledClient() || !token || typeof localStorage === 'undefined') return;
+  const blob = await wrapDeviceSecret(token);
+  if (blob) localStorage.setItem(NATIVE_SESSION_WRAP_KEY, blob);
+}
+
+export async function restoreNativeSession() {
+  if (!isInstalledClient() || typeof localStorage === 'undefined') return null;
+  const blob = localStorage.getItem(NATIVE_SESSION_WRAP_KEY);
+  if (!blob) return null;
+  const token = await unwrapDeviceSecret(blob);
+  if (!token) {
+    localStorage.removeItem(NATIVE_SESSION_WRAP_KEY);
+    return null;
+  }
+  return token;
+}
+
+export function clearNativeSession() {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.removeItem(NATIVE_SESSION_WRAP_KEY);
+}

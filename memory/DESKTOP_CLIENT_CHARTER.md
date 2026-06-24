@@ -34,7 +34,7 @@ main.mjs → libsignal bridge (Node @signalapp/libsignal-client 0.96.2)
 Persistent store: %APPDATA%/SSC/signal-store/ (Windows) · ~/Library/Application Support/SSC/ (Mac)
 ```
 
-Session auth: **in-memory JWT** (same as Android APK — Engine 5 native path).
+Session auth: **memory JWT + encrypted device wrap** (same as Android APK — Engine 5 + TASK B).
 
 ---
 

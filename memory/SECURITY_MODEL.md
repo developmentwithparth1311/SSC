@@ -13,7 +13,7 @@
 | Message bodies | Client-side encryption before server; server stores ciphertext only |
 | Files | E2E ciphertext in GridFS; conversation ACL on download |
 | Private key | PBKDF2 + AES-GCM wrap; decrypted key in memory only (vault) |
-| Sessions | HttpOnly cookie (web) or in-memory token (Android); Redis revocation in production |
+| Sessions | HttpOnly cookie (web) or memory + encrypted device wrap (installed); Redis revocation in production |
 | 24h recycle | Mongo TTL on messages, files, stories, conversations |
 
 **Panic wipe:** Deletes chats, files, stories, sessions, device secrets. **Keeps** account + contacts.

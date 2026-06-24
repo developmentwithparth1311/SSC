@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-24 (TASK A complete · execution plan · vault policy)
+**Updated:** 2026-06-24 (TASK B complete · TASK A complete)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -17,8 +17,8 @@
 4. **Release gate** — TASK I (QA matrix) must be green before Firebase testers beyond founder.
 
 **Current builds:** APK v1.0.4 build 6 · Windows `SSC-Setup-1.0.4.exe` · API `ssc-api-00012-bbc`
-**Last task completed:** TASK A — Invisible security (`8bc3571`)
-**Next task:** TASK B — Session persistence (stay logged in)
+**Last task completed:** TASK B — Session persistence (pending commit)
+**Next task:** TASK C — Real-time contacts & friend requests
 
 ---
 
@@ -47,7 +47,7 @@
 | 2 E2E integrity | ✅ | Vault policy, file ACL, verification |
 | 3 Client footprint | ✅ | Panic orchestrator, storage purge |
 | 4 Metadata minimization | ✅ | last_seen, generic push |
-| 5 Session hardening | ✅ | HttpOnly web · in-memory native JWT · Redis revocation |
+| 5 Session hardening | ✅ | HttpOnly web · native JWT + encrypted device wrap (TASK B) · Redis revocation |
 | 8 Signal Protocol | ✅ | libsignal 0.96.2 · 1:1, groups, stories, call signaling |
 | 9 Translation | ✅ | On-device ML Kit (Android) |
 | 10 Desktop | ✅ | Electron + libsignal · Windows NSIS · Mac dmg config |
@@ -79,7 +79,7 @@
 | Engine 1–5, 8, 9, 10 gates | **PASS** |
 | Unified identity + contacts graph gates | **PASS** |
 | `e2e_smoke.py` + production `/api/health` | **PASS** |
-| Frontend `yarn test:ci` | **32 passed** |
+| Frontend `yarn test:ci` | **36 passed** |
 
 ---
 
@@ -123,17 +123,17 @@
 
 ---
 
-### TASK B — Session persistence (stay logged in) · P0-2
+### TASK B — Session persistence (stay logged in) · ✅ DONE (24 Jun 2026)
 
 **Goal:** Force-close app → reopen → still logged in. Logout only explicit or panic wipe.
 
 | ID | Subtask | Files / notes | Status |
 |----|---------|---------------|--------|
-| B.1 | Persist JWT in **native secure storage** (Android Keystore / EncryptedSharedPreferences; desktop OS credential store) | New `lib/nativeSessionStore.js`, Capacitor plugin or `@capacitor/preferences` + encrypt | [ ] |
-| B.2 | Restore session on cold start before routing to `/login` | `AuthContext.jsx`, `App.js`, `Protected` route | [ ] |
-| B.3 | **Panic wipe** + **logout** clear secure storage | `clientFootprintOrchestrator.js`, `AuthContext.jsx` | [ ] |
-| B.4 | Engine 5 policy doc note — update accepted tradeoff if persistence ships | `memory/CLIENT_FOOTPRINT_CHARTER.md` | [ ] |
-| B.5 | QA: force-stop Android → reopen → chat list without Google again | Founder dots device | [ ] |
+| B.1 | Persist JWT as **AES device wrap** (`ssc_session_wrap_enc`) — never plaintext `ssc_token` | `nativeSessionStore.js`, `deviceWrapCrypto.js` | [x] |
+| B.2 | `bootstrapSessionFromDevice()` before `/auth/me` on cold start | `AuthContext.jsx`, `sessionStore.js` | [x] |
+| B.3 | Logout + panic clear encrypted wrap; 401 clears stale session | `clientFootprintOrchestrator.js`, `clearSessionToken` | [x] |
+| B.4 | Policy docs updated (S3 gap closed) | `SESSION_HARDENING_CHARTER.md`, `CLIENT_FOOTPRINT_CHARTER.md`, `session_policy.py` | [x] |
+| B.5 | Founder QA: force-stop Android → reopen → still in chat | dots device after rebuild | [ ] |
 
 ---
 
@@ -249,7 +249,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | Area | Test | Depends on | Status |
 |------|------|------------|--------|
 | Auth | Google login both devices | — | [x] |
-| Auth | Stay logged in after force-close | TASK B | [ ] |
+| Auth | Stay logged in after force-close | TASK B | [x] code · [ ] founder retest |
 | Auth | Google-only email login shows friendly error | TASK H.5 | [ ] |
 | Contacts | Friend request live (send + accept) | TASK C | [ ] |
 | Chat | 1:1 text real-time | — | [x] |
@@ -309,7 +309,7 @@ Google OAuth · friend request (after restart) · 1:1 chat · PC→phone video (
 | Issue | Task |
 |-------|------|
 | P0-1 Friend request not live | C |
-| P0-2 Session lost on force-close | B |
+| P0-2 Session lost on force-close | B ✅ (founder retest after rebuild) |
 | P0-3 Android mic/camera permissions | D |
 | P0-4 Calls one-way / no audio / no ring | D |
 | P0-5 Desktop voice note empty | E |
@@ -333,7 +333,7 @@ Google OAuth · friend request (after restart) · 1:1 chat · PC→phone video (
 | **Signal** | libsignal on device — primary E2E for installed clients. `ensurePreKeysUploaded()` on login. |
 | **Legacy RSA** | Dual-read internal fallback. No user-facing “upgrade”. |
 | **Google vs password** | Google = session; SSC password from finish-setup = vault wrap. Email login on Google-only account must fail with clear copy. |
-| **Session** | Engine 5: native JWT in memory today — force-stop clears it. TASK B adds secure persistence without weakening panic wipe. |
+| **Session** | Memory at runtime + `ssc_session_wrap_enc` (AES device wrap). Survives force-close; logout/panic/401 clear it. Never plaintext `ssc_token`. |
 | **Back stack** | `leaveChat()` push + system back pops into `/chat/:id`. Fix: `replace: true` + Capacitor `backButton`. |
 
 ---
@@ -390,3 +390,4 @@ yarn test:ci
 | 2026-06-24 | Founder policy — vault in concrete; auto libsignal; hide verify |
 | 2026-06-24 | **Roadmap restructure** — execution plan TASK A–K with subtasks |
 | 2026-06-24 | **TASK A complete** — invisible vault/crypto UX; `vaultCredentialStore.js`; frontend 32 tests pass |
+| 2026-06-24 | **TASK B complete** — encrypted session persist; S3 gap closed; frontend 36 tests pass |
