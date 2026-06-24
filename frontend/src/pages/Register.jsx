@@ -96,6 +96,7 @@ export default function Register() {
     await signInWithGoogle({
       loginWithToken,
       navigate,
+      refreshUser,
       onBusy: setBusy,
       onError: (msg) => toast.error(msg || t('googleSignInFailed')),
     });

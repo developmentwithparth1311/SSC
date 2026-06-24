@@ -1,35 +1,8 @@
 /**
- * Google Sign-In — web (GIS popup) + native (browser redirect via backend OAuth).
+ * Google Sign-In — installed clients only (Android APK + desktop). No browser-tab flow.
  */
 import { api, API } from './api';
-import { isNativeApp } from './platform';
-
-let gsiLoaded = false;
-
-function loadGsiScript() {
-  if (gsiLoaded || typeof window === 'undefined') return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    if (window.google?.accounts?.id) {
-      gsiLoaded = true;
-      resolve();
-      return;
-    }
-    const existing = document.querySelector('script[data-ssc-gsi]');
-    if (existing) {
-      existing.addEventListener('load', () => { gsiLoaded = true; resolve(); });
-      existing.addEventListener('error', reject);
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.defer = true;
-    s.dataset.sscGsi = '1';
-    s.onload = () => { gsiLoaded = true; resolve(); };
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
+import { isElectronApp, isNativeApp } from './platform';
 
 export async function fetchGoogleConfig() {
   try {
@@ -41,98 +14,54 @@ export async function fetchGoogleConfig() {
 }
 
 /** Complete sign-in after backend returns token + user. */
-export async function completeGoogleAuth({ token, user, needs_username }, { loginWithToken, navigate }) {
+export async function completeGoogleAuth(
+  { token, user, needs_username },
+  { loginWithToken, navigate, refreshUser },
+) {
   await loginWithToken(token, user);
-  if (needs_username || !user?.username || !user?.public_key) {
-    navigate('/setup', { state: { user } });
+  const fresh = refreshUser ? await refreshUser() : user;
+  const resolved = fresh || user;
+  if (needs_username || !resolved?.username || !resolved?.public_key) {
+    navigate('/setup', { replace: true });
     return;
   }
-  navigate('/chat');
+  navigate('/chat', { replace: true });
 }
 
-/** Native: OAuth in system browser; Cloud Run redirects to chat.ssc.secure://app/auth/google. */
-export async function signInWithGoogleNative() {
-  const url = `${API}/auth/google/start?platform=native`;
-  try {
-    const { Browser } = await import('@capacitor/browser');
-    await Browser.open({ url, presentationStyle: 'popover' });
-  } catch {
-    window.location.href = url;
+function oauthPlatform() {
+  if (isNativeApp()) return 'native';
+  if (isElectronApp()) return 'desktop';
+  return null;
+}
+
+/** Installed: full-page OAuth inside the app shell (no external browser). */
+export async function signInWithGoogleInstalled() {
+  const platform = oauthPlatform();
+  if (!platform) {
+    throw new Error('Google sign-in requires the installed SSC app');
   }
+  window.location.href = `${API}/auth/google/start?platform=${platform}`;
   return true;
 }
 
-/** Web: Google Identity Services one-tap / popup → id_token → backend. */
-export function signInWithGoogleWeb(clientId, { onBusy, onError }) {
-  return new Promise((resolve, reject) => {
-    loadGsiScript()
-      .then(() => {
-        if (!window.google?.accounts?.id) {
-          reject(new Error('Google Sign-In failed to load'));
-          return;
-        }
-        onBusy?.(true);
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response) => {
-            try {
-              const { data } = await api.post('/auth/google/session', {
-                id_token: response.credential,
-              });
-              resolve(data);
-            } catch (err) {
-              onError?.(err?.response?.data?.detail || 'Google sign-in failed');
-              reject(err);
-            } finally {
-              onBusy?.(false);
-            }
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // Fallback: full-page redirect via backend OAuth
-            onBusy?.(false);
-            window.location.href = `${API}/auth/google/start?platform=web`;
-          }
-        });
-      })
-      .catch((e) => {
-        onBusy?.(false);
-        reject(e);
-      });
-  });
-}
-
-/** Unified entry — picks native vs web automatically. */
-export async function signInWithGoogle({ loginWithToken, navigate, onBusy, onError }) {
+/** Unified entry — installed clients only. */
+export async function signInWithGoogle({ loginWithToken, navigate, refreshUser, onBusy, onError }) {
   const cfg = await fetchGoogleConfig();
   if (!cfg.enabled && !cfg.client_id) {
     onError?.('Google sign-in is not configured on the server yet.');
     return null;
   }
 
-  if (isNativeApp()) {
-    onBusy?.(true);
-    try {
-      await signInWithGoogleNative();
-      return null; // completion happens via /auth/google callback route
-    } finally {
-      onBusy?.(false);
-    }
+  const platform = oauthPlatform();
+  if (!platform) {
+    onError?.('Install the SSC app to sign in with Google.');
+    return null;
   }
 
+  onBusy?.(true);
   try {
-    onBusy?.(true);
-    const data = await signInWithGoogleWeb(cfg.client_id, { onBusy, onError });
-    if (data) {
-      await completeGoogleAuth(
-        { token: data.token, user: data.user, needs_username: data.needs_username },
-        { loginWithToken, navigate },
-      );
-    }
-    return data;
+    await signInWithGoogleInstalled();
+    return null;
   } catch (e) {
     onError?.(e?.message || 'Google sign-in failed');
     return null;

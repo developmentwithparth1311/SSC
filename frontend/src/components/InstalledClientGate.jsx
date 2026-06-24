@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { DeviceMobile, Desktop } from '@phosphor-icons/react';
-import { isBrowserDevAllowed, isInstalledClient } from '../lib/platform';
+import { isInstalledClient } from '../lib/platform';
 import { useLocale } from '../context/LocaleContext';
 
 /**
@@ -11,7 +11,7 @@ import { useLocale } from '../context/LocaleContext';
 export default function InstalledClientGate({ children }) {
   const { t } = useLocale();
 
-  if (isInstalledClient() || isBrowserDevAllowed()) {
+  if (isInstalledClient()) {
     return children;
   }
 

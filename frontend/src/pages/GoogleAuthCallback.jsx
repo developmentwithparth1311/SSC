@@ -4,51 +4,48 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { completeGoogleAuth } from '../lib/google-auth';
 import { api } from '../lib/api';
-import { isNativeApp } from '../lib/platform';
+import { isInstalledClient } from '../lib/platform';
 import { persistSessionToken } from '../lib/sessionStore';
 
-/** Handles OAuth redirect: /auth/google?needs_setup=0|1 (web cookie) or ?token=… (native). */
+/** Handles installed-app OAuth return: /auth/google?token=…&needs_setup=0|1 */
 export default function GoogleAuthCallback() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { loginWithToken } = useAuth();
+  const { loginWithToken, refreshUser } = useAuth();
   const done = useRef(false);
 
   useEffect(() => {
     if (done.current) return;
     done.current = true;
 
+    if (!isInstalledClient()) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
     const token = params.get('token');
     const needsSetup = params.get('needs_setup') === '1';
 
     (async () => {
       try {
-        if (isNativeApp()) {
-          if (!token) {
-            toast.error('Google sign-in failed — no token');
-            navigate('/login');
-            return;
-          }
-          persistSessionToken(token);
-          const { data: user } = await api.get('/auth/me');
-          await completeGoogleAuth(
-            { token, user, needs_username: needsSetup },
-            { loginWithToken, navigate },
-          );
-        } else {
-          const { data: user } = await api.get('/auth/me');
-          await completeGoogleAuth(
-            { token: null, user, needs_username: needsSetup },
-            { loginWithToken, navigate },
-          );
+        if (!token) {
+          toast.error('Google sign-in failed — no token');
+          navigate('/login', { replace: true });
+          return;
         }
+        persistSessionToken(token);
+        const { data: user } = await api.get('/auth/me');
+        await completeGoogleAuth(
+          { token, user, needs_username: needsSetup },
+          { loginWithToken, navigate, refreshUser },
+        );
         toast.success('Signed in with Google');
       } catch {
         toast.error('Google sign-in failed');
-        navigate('/login');
+        navigate('/login', { replace: true });
       }
     })();
-  }, [loginWithToken, navigate, params]);
+  }, [loginWithToken, navigate, params, refreshUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs tracking-[0.25em]">

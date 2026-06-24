@@ -75,8 +75,8 @@ async def create_conversation(body: CreateConversationIn, current=Depends(get_cu
             members = [m for m in members if m]
             payload = sanitize_conversation_for_api({**conv, "members": members}, pid)
             await manager.send_to_user(pid, {"type": "conversation-created", "data": payload})
-            if p != current["user_id"]:
-                asyncio.create_task(send_push_for_group_added(p, current, conv))
+            if pid != current["user_id"]:
+                asyncio.create_task(send_push_for_group_added(pid, current, conv))
         return sanitize_conversation_for_api(conv, current["user_id"])
 
     if not body.peer_username:

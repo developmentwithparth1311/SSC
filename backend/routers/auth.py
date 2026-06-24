@@ -6,7 +6,7 @@ from typing import Optional
 
 import pyotp
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 
 from core.auth import (
     client_ip,
@@ -162,11 +162,10 @@ async def _google_find_or_create(claims: dict) -> tuple[dict, bool]:
     if not doc:
         doc = await db.users.find_one({"email": email})
         if doc and doc.get("auth_provider") == "password" and not doc.get("google_sub"):
-            await db.users.update_one(
-                {"user_id": doc["user_id"]},
-                {"$set": {"google_sub": google_sub, "auth_provider": "google"}},
+            raise HTTPException(
+                409,
+                "This email already has a password account. Sign in with email and password.",
             )
-            doc = await db.users.find_one({"user_id": doc["user_id"]})
 
     if not doc:
         user_id = f"u_{uuid.uuid4().hex[:14]}"
@@ -200,22 +199,13 @@ async def google_config():
 
 
 @router.get("/google/start")
-async def google_start(platform: str = "web"):
-    from core.google_auth import authorization_url, is_configured
+async def google_start(platform: str = "native"):
+    from core.google_auth import INSTALLED_PLATFORMS, authorization_url, is_configured
     if not is_configured():
         raise HTTPException(501, "Google login not configured on server")
-    plat = "native" if platform == "native" else "web"
-    return RedirectResponse(authorization_url(plat))
-
-
-@router.get("/google/native-return")
-async def google_native_return(token: str = "", needs_setup: str = "0"):
-    """HTTPS bridge after Google OAuth — opens chat.ssc.secure:// deep link into the app."""
-    from core.google_auth import native_return_html
-
-    if not token:
-        raise HTTPException(400, "Missing token")
-    return HTMLResponse(native_return_html(token, needs_setup == "1"))
+    if platform not in INSTALLED_PLATFORMS:
+        raise HTTPException(400, "Google OAuth requires platform=native or platform=desktop")
+    return RedirectResponse(authorization_url(platform))
 
 
 @router.get("/google/callback")

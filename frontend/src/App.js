@@ -6,7 +6,7 @@ import { Toaster } from 'sonner';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import SetupUsername from './pages/SetupUsername';
-import AuthCallback from './pages/AuthCallback';
+
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import ChatHome from './pages/ChatHome';
 import Landing from './pages/Landing';
@@ -80,11 +80,6 @@ function Protected({ children }) {
 }
 
 function AppRouter() {
-  const location = useLocation();
-  // OAuth callback handling (Google currently disabled; keep for future standard OAuth)
-  if (location.hash?.includes('session_id=') || location.search?.includes('code=')) {
-    return <AuthCallback />;
-  }
   return (
     <Routes>
       <Route path="/" element={<Landing />} />

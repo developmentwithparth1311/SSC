@@ -4,14 +4,35 @@ import { fileURLToPath } from 'node:url';
 import { initLibsignalBridge, invokeLibsignal } from './libsignal/bridge.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DESKTOP_AUTH_SCHEME = 'chat.ssc.secure.desktop';
 
 let mainWindow = null;
+let pendingAuthUrl = null;
 
 function rendererIndex() {
   if (!app.isPackaged) {
     return path.join(__dirname, '../../build/index.html');
   }
   return path.join(process.resourcesPath, 'renderer', 'index.html');
+}
+
+function routeAuthDeepLink(url) {
+  if (!url || !url.startsWith(`${DESKTOP_AUTH_SCHEME}://`)) return false;
+  try {
+    const parsed = new URL(url);
+    const authPath = parsed.pathname || '/auth/google';
+    const hashRoute = `${authPath}${parsed.search}${parsed.hash}`;
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.loadFile(rendererIndex(), { hash: hashRoute });
+    } else {
+      pendingAuthUrl = hashRoute;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function createWindow() {
@@ -33,14 +54,51 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    if (pendingAuthUrl) {
+      mainWindow.loadFile(rendererIndex(), { hash: pendingAuthUrl });
+      pendingAuthUrl = null;
+    }
   });
-  mainWindow.loadFile(rendererIndex());
+
+  if (pendingAuthUrl) {
+    mainWindow.loadFile(rendererIndex(), { hash: pendingAuthUrl });
+    pendingAuthUrl = null;
+  } else {
+    mainWindow.loadFile(rendererIndex());
+  }
+
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 }
 
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(DESKTOP_AUTH_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient(DESKTOP_AUTH_SCHEME);
+}
+
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const authUrl = argv.find((arg) => arg.startsWith(`${DESKTOP_AUTH_SCHEME}://`));
+    if (authUrl) routeAuthDeepLink(authUrl);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    const winUrl = process.argv.find((arg) => arg.startsWith(`${DESKTOP_AUTH_SCHEME}://`));
+    if (winUrl) routeAuthDeepLink(winUrl);
+  }
   createWindow();
   try {
     initLibsignalBridge(app.getPath('userData'));
@@ -50,6 +108,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  routeAuthDeepLink(url);
 });
 
 app.on('window-all-closed', () => {

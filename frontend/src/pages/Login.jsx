@@ -15,7 +15,7 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const panic = searchParams.get('panic') === '1';
   const wiped = searchParams.get('wiped') === '1';
-  const { loginWithToken, unlockPrivateKey } = useAuth();
+  const { loginWithToken, unlockPrivateKey, refreshUser } = useAuth();
   const { t } = useLocale();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,6 +70,7 @@ export default function Login() {
     await signInWithGoogle({
       loginWithToken,
       navigate,
+      refreshUser,
       onBusy: setBusy,
       onError: (msg) => toast.error(msg || t('googleSignInFailed')),
     });

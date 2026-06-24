@@ -23,8 +23,8 @@ export default function SetupUsername() {
   const ref = useRef(null);
 
   useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-  }, [user, navigate]);
+    if (!user && !busy) navigate('/login', { replace: true });
+  }, [user, navigate, busy]);
 
   useEffect(() => {
     if (!username) { setStatus({ checking: false, available: null, reason: '' }); return; }

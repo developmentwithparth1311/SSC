@@ -45,7 +45,7 @@ def main() -> int:
 
     cors = cfg.get(
         "CORS_ORIGINS",
-        "https://localhost,capacitor://localhost,https://super-chat-b0992.web.app,https://super-chat-b0992.firebaseapp.com",
+        "https://localhost,capacitor://localhost",
     )
     deploy_env = {
         "ENV": "production",
@@ -66,8 +66,8 @@ def main() -> int:
         "GOOGLE_CLIENT_ID",
         "GOOGLE_CLIENT_SECRET",
         "GOOGLE_REDIRECT_URI",
-        "FRONTEND_OAUTH_REDIRECT",
         "NATIVE_OAUTH_REDIRECT",
+        "DESKTOP_OAUTH_REDIRECT",
         "TURN_USERNAME",
         "TURN_CREDENTIAL",
     ):

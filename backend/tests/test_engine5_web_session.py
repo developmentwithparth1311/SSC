@@ -36,10 +36,11 @@ def test_auth_context_no_localstorage_jwt_on_web():
     assert "purgeLegacyJwtFromStorage" in text
 
 
-def test_google_callback_web_uses_me_not_token_param():
+def test_google_callback_installed_uses_token_and_me():
     text = (FRONTEND / "pages" / "GoogleAuthCallback.jsx").read_text(encoding="utf-8")
-    assert "isNativeApp()" in text
+    assert "isInstalledClient()" in text
     assert "/auth/me" in text
+    assert "persistSessionToken" in text
     assert "localStorage.setItem('ssc_token'" not in text
 
 
@@ -48,24 +49,20 @@ def test_orchestrator_cookie_logout_on_web():
     assert "usesBearerAuth" in text
 
 
-def test_google_web_redirect_omits_token_in_url():
-    url = frontend_redirect("web", "secret_jwt_value", False)
-    assert "secret_jwt_value" not in url
-    assert "needs_setup=0" in url
-    assert "/auth/google" in url
+def test_google_native_redirect_uses_capacitor_origin():
+    url = frontend_redirect("native", "tok", False)
+    assert url.startswith("https://localhost/auth/google")
 
 
 def test_google_native_redirect_keeps_token():
     url = frontend_redirect("native", "native_tok", True)
     assert "token=native_tok" in url
     assert "needs_setup=1" in url
-    assert "native-return" in url
+    assert "/auth/google" in url
 
 
-def test_google_native_return_html_opens_deep_link():
-    from core.google_auth import native_return_html
-
-    html = native_return_html("tok123", True)
-    assert "chat.ssc.secure://app/auth/google" in html
-    assert "tok123" in html
-    assert "intent://" in html
+def test_google_desktop_redirect_uses_desktop_scheme():
+    url = frontend_redirect("desktop", "desk_tok", False)
+    assert "token=desk_tok" in url
+    assert "needs_setup=0" in url
+    assert "chat.ssc.secure.desktop://" in url

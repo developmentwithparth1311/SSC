@@ -49,20 +49,13 @@ export function getPlatform() {
 export function getBackendUrl() {
   const raw = process.env.REACT_APP_BACKEND_URL || '';
   const url = raw.trim().replace(/\/$/, '');
-  if (!url) {
-    if (isNativeApp()) {
-      console.warn('[SSC] REACT_APP_BACKEND_URL missing — native app needs your production API URL at build time');
-    }
-    return 'http://localhost:8000';
+  if (!url && isInstalledClient()) {
+    console.error('[SSC] REACT_APP_BACKEND_URL missing — installed app build is misconfigured');
   }
-  return url;
+  return url || '';
 }
 
+/** Browser web-push retired — installed clients use native FCM. */
 export function supportsWebPush() {
-  return !isNativeApp() && 'serviceWorker' in navigator && 'PushManager' in window;
-}
-
-/** Founder-only: allow browser-tab chat on localhost when REACT_APP_BROWSER_DEV=true */
-export function isBrowserDevAllowed() {
-  return process.env.REACT_APP_BROWSER_DEV === 'true';
+  return false;
 }

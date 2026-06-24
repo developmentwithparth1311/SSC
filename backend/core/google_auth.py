@@ -1,8 +1,7 @@
-"""Google OAuth2 — verify ID tokens and build authorization URLs."""
+"""Google OAuth2 — installed clients only (Android + desktop). No browser-tab redirect flow."""
 import hmac
 import os
 from hashlib import sha256
-from typing import Optional
 from urllib.parse import urlencode
 
 import requests
@@ -14,11 +13,14 @@ from core.config import JWT_SECRET
 GOOGLE_CLIENT_ID = (os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
 GOOGLE_CLIENT_SECRET = (os.environ.get("GOOGLE_CLIENT_SECRET") or "").strip()
 GOOGLE_REDIRECT_URI = (os.environ.get("GOOGLE_REDIRECT_URI") or "").strip()
-FRONTEND_OAUTH_REDIRECT = (os.environ.get("FRONTEND_OAUTH_REDIRECT") or "http://localhost:3000").rstrip("/")
-NATIVE_OAUTH_REDIRECT = (os.environ.get("NATIVE_OAUTH_REDIRECT") or "http://localhost").rstrip("/")
+# Capacitor Android WebView origin (installed app shell — not a browser tab).
+NATIVE_OAUTH_REDIRECT = (os.environ.get("NATIVE_OAUTH_REDIRECT") or "https://localhost").rstrip("/")
+DESKTOP_OAUTH_REDIRECT = (os.environ.get("DESKTOP_OAUTH_REDIRECT") or "chat.ssc.secure.desktop://auth").rstrip("/")
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+INSTALLED_PLATFORMS = frozenset({"native", "desktop"})
 
 
 def is_configured() -> bool:
@@ -56,15 +58,17 @@ def make_state(platform: str) -> str:
 
 def parse_state(state: str) -> str:
     if not state or ":" not in state:
-        return "web"
+        return "native"
     platform, sig = state.split(":", 1)
     expected = hmac.new(JWT_SECRET.encode(), platform.encode(), sha256).hexdigest()[:16]
     if not hmac.compare_digest(sig, expected):
-        return "web"
-    return platform if platform in ("web", "native") else "web"
+        return "native"
+    return platform if platform in INSTALLED_PLATFORMS else "native"
 
 
-def authorization_url(platform: str = "web") -> str:
+def authorization_url(platform: str = "native") -> str:
+    if platform not in INSTALLED_PLATFORMS:
+        raise ValueError(f"Unsupported OAuth platform: {platform}")
     if not is_configured():
         raise ValueError("Google OAuth not configured")
     params = {
@@ -98,69 +102,16 @@ def exchange_code(code: str) -> dict:
     return r.json()
 
 
-def native_deep_link(token: str, needs_setup: bool) -> str:
-    """Custom scheme URL opened by the installed Android app."""
-    q = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
-    return f"{NATIVE_OAUTH_REDIRECT}/auth/google?{q}"
-
-
-def native_return_bridge_url(token: str, needs_setup: bool) -> str:
-    """HTTPS bridge — Chrome Custom Tabs fail on bare custom-scheme 302 redirects."""
-    if not GOOGLE_REDIRECT_URI or "/api/" not in GOOGLE_REDIRECT_URI:
-        return native_deep_link(token, needs_setup)
-    api_base = GOOGLE_REDIRECT_URI.rsplit("/api/", 1)[0]
-    q = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
-    return f"{api_base}/api/auth/google/native-return?{q}"
-
-
-def native_return_html(token: str, needs_setup: bool) -> str:
-    """Minimal page that hands off from the OAuth browser back into the app."""
-    import json
-
-    deep = native_deep_link(token, needs_setup)
-    query = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
-    intent = (
-        f"intent://app/auth/google?{query}"
-        "#Intent;scheme=chat.ssc.secure;package=chat.ssc.secure;end"
-    )
-    deep_js = json.dumps(deep)
-    intent_js = json.dumps(intent)
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SSC</title>
-  <style>
-    body {{
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #0A0A0A; color: #A1A1AA; font-family: system-ui, sans-serif; text-align: center;
-      padding: 24px;
-    }}
-    a {{ color: #00E5FF; }}
-  </style>
-</head>
-<body>
-  <div>
-    <p>Opening SSC…</p>
-    <p><a id="open-ssc" href="#">Tap here if the app does not open</a></p>
-  </div>
-  <script>
-    (function () {{
-      var deep = {deep_js};
-      var intent = {intent_js};
-      var link = document.getElementById('open-ssc');
-      link.href = deep;
-      try {{ window.location.replace(intent); }} catch (e) {{}}
-      setTimeout(function () {{ window.location.replace(deep); }}, 500);
-    }})();
-  </script>
-</body>
-</html>"""
+def _installed_oauth_base(platform: str) -> str:
+    if platform == "desktop":
+        return DESKTOP_OAUTH_REDIRECT
+    return NATIVE_OAUTH_REDIRECT
 
 
 def frontend_redirect(platform: str, token: str, needs_setup: bool) -> str:
-    flag = "1" if needs_setup else "0"
-    if platform == "web":
-        return f"{FRONTEND_OAUTH_REDIRECT}/auth/google?needs_setup={flag}"
-    return native_return_bridge_url(token, needs_setup)
+    """Redirect back into the installed app shell with session token in query."""
+    if platform not in INSTALLED_PLATFORMS:
+        platform = "native"
+    q = urlencode({"token": token, "needs_setup": "1" if needs_setup else "0"})
+    base = _installed_oauth_base(platform)
+    return f"{base}/auth/google?{q}"
