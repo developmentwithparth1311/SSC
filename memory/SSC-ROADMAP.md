@@ -449,7 +449,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | M.5 | **Change password** (password accounts only) | `auth` router + Settings | [ ] |
 | M.6 | **User retention picker** (1h / 6h / 24h / 7d) | backend policy + Settings | [ ] deferred v1.1 |
 | M.7 | **Delete account** flow | backend + Settings + confirm | [ ] before public |
-| M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [ ] |
+| M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [~] Message decrypt retry + i18n |
 | M.9 | **Stories UX pass** — views, delete, navigation | `Stories.jsx` | [ ] |
 | M.10 | **Calls visual polish** — failed/reconnect copy | `CallModal.jsx` | [ ] |
 | M.11 | **Group admin** — rename, add/remove members | `ChatHome.jsx`, API | [ ] |

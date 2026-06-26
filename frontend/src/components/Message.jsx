@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useLocale } from '../context/LocaleContext';
 import { Translate, Paperclip, Check, Checks, Play, Pause, DownloadSimple } from '@phosphor-icons/react';
 import { decryptBytes } from '../lib/crypto';
 import {
@@ -29,6 +30,17 @@ export default function Message({
   const [showTranslated, setShowTranslated] = useState(false);
   const [error, setError] = useState(null);
   const [vaultLocked, setVaultLocked] = useState(false);
+  const [decrypting, setDecrypting] = useState(true);
+  const [decryptAttempt, setDecryptAttempt] = useState(0);
+  const { t } = useLocale();
+
+  const retryDecrypt = useCallback(() => {
+    setError(null);
+    setVaultLocked(false);
+    setPlaintext(null);
+    setDecrypting(true);
+    setDecryptAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => subscribeMemoryWipe(() => {
     setPlaintext(null);
@@ -41,6 +53,10 @@ export default function Message({
 
   useEffect(() => {
     let mounted = true;
+    setDecrypting(true);
+    const slowTimer = setTimeout(() => {
+      if (mounted) setError((prev) => (prev ? prev : 'DECRYPT_SLOW'));
+    }, 8000);
     (async () => {
       try {
         const pt = await decryptMessageBody(msg, { myUserId, peerUserId, privateKey });
@@ -48,9 +64,11 @@ export default function Message({
           setPlaintext(pt);
           setError(null);
           setVaultLocked(false);
+          setDecrypting(false);
         }
       } catch (e) {
         if (!mounted) return;
+        setDecrypting(false);
         const code = e?.message;
         if (code === 'VAULT_LOCKED') {
           setPlaintext(null);
@@ -63,8 +81,11 @@ export default function Message({
         else setError('DECRYPT_FAIL');
       }
     })();
-    return () => { mounted = false; };
-  }, [msg, myUserId, privateKey, peerUserId]);
+    return () => {
+      mounted = false;
+      clearTimeout(slowTimer);
+    };
+  }, [msg, myUserId, privateKey, peerUserId, decryptAttempt]);
 
   const sameLanguage = Boolean(
     sourceLang && targetLang && sourceLang.toLowerCase() === targetLang.toLowerCase(),
@@ -115,13 +136,29 @@ export default function Message({
   return (
     <div className={`flex flex-col max-w-[78%] ${isMine ? 'self-end items-end' : 'self-start items-start'} fade-up`}>
       <div className={`px-3 py-2 ${bubbleClass} text-sm leading-relaxed break-words shadow`} data-testid={`message-${msg.message_id}`}>
-        {error === 'DECRYPT_FAIL' && <span className="font-mono text-xs text-[#FF3B30]">[unable to decrypt]</span>}
-        {error === 'NO_KEY' && <span className="font-mono text-xs text-[#FF3B30]">[no key for this device]</span>}
-        {vaultLocked && (
-          <span className="font-mono text-xs text-[#FF9500]">[encrypted — reopen app to unlock]</span>
+        {error === 'DECRYPT_FAIL' && (
+          <span className="text-xs text-[#FF3B30]">
+            {t('messageDecryptFail')}
+            <button type="button" onClick={retryDecrypt} className="ml-2 underline hover:text-white">{t('messageDecryptRetry')}</button>
+          </span>
         )}
-        {!error && !vaultLocked && plaintext === null && (
-          <span className="font-mono text-xs text-[#A1A1AA]">decrypting…</span>
+        {error === 'NO_KEY' && (
+          <span className="text-xs text-[#FF3B30]">
+            {t('messageDecryptNoKey')}
+            <button type="button" onClick={retryDecrypt} className="ml-2 underline hover:text-white">{t('messageDecryptRetry')}</button>
+          </span>
+        )}
+        {error === 'DECRYPT_SLOW' && plaintext === null && !vaultLocked && (
+          <span className="text-xs text-[#FF9500]">
+            {t('messageDecryptSlow')}
+            <button type="button" onClick={retryDecrypt} className="ml-2 underline hover:text-white">{t('messageDecryptRetry')}</button>
+          </span>
+        )}
+        {vaultLocked && (
+          <span className="text-xs text-[#FF9500]">{t('messageVaultLocked')}</span>
+        )}
+        {!error && !vaultLocked && decrypting && plaintext === null && (
+          <span className="text-xs text-[#A1A1AA]">{t('messageDecrypting')}</span>
         )}
         {!error && plaintext !== null && (
           <>
