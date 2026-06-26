@@ -47,6 +47,7 @@ describe('Landing', () => {
     renderLanding();
     expect(screen.getByTestId('landing-download-panel')).toBeInTheDocument();
     expect(screen.getByText(translate('landingGetAndroid', 'en'))).toBeInTheDocument();
+    expect(screen.getByTestId('landing-screenshots-section')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: translate('landingLogin', 'en') })).not.toBeInTheDocument();
   });
 

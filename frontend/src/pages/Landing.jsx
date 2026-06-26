@@ -1,13 +1,35 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-
-const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.7';
-const DOWNLOAD_APK_URL = process.env.REACT_APP_DOWNLOAD_APK_URL || '';
-const DOWNLOAD_WIN_URL = process.env.REACT_APP_DOWNLOAD_WIN_URL || '';
-import { ShieldCheck, Clock, Translate, Lightning, LockKey, Eye, DeviceMobile, Desktop } from '@phosphor-icons/react';
+import { ShieldCheck, Clock, Translate, Lightning, LockKey, Eye, DeviceMobile, Desktop, DownloadSimple, UsersThree } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 import LanguagePicker from '../components/LanguagePicker';
+import LandingScreenshots from '../components/LandingScreenshots';
 import { isInstalledClient } from '../lib/platform';
+
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.8';
+const DOWNLOAD_APK_URL = process.env.REACT_APP_DOWNLOAD_APK_URL || '';
+const DOWNLOAD_WIN_URL = process.env.REACT_APP_DOWNLOAD_WIN_URL || '';
+const DOWNLOAD_ANDROID_BETA_URL = process.env.REACT_APP_DOWNLOAD_ANDROID_BETA_URL || '';
+const SITE_ORIGIN = 'https://www.supersecurechat.com';
+
+function DownloadButton({ href, label, testId, external }) {
+  if (!href) return null;
+  const cls = 'inline-flex items-center gap-2 mt-3 px-4 py-2.5 bg-[#00E5FF] text-black text-xs font-mono font-medium rounded-md hover:brightness-110 transition';
+  if (external) {
+    return (
+      <a href={href} className={cls} data-testid={testId} rel="noopener noreferrer">
+        <DownloadSimple size={16} weight="bold" />
+        {label}
+      </a>
+    );
+  }
+  return (
+    <a href={href} className={cls} data-testid={testId}>
+      <DownloadSimple size={16} weight="bold" />
+      {label}
+    </a>
+  );
+}
 
 export default function Landing() {
   const { t } = useLocale();
@@ -90,38 +112,49 @@ export default function Landing() {
             ) : (
               <div className="mt-10 space-y-3 max-w-lg" data-testid="landing-download-panel">
                 <p className="text-sm text-[#A1A1AA]">{t('landingDownloadBody')}</p>
+                <p className="text-[10px] font-mono text-[#71717A] tracking-wider">{t('landingVersionLabel', { version: APP_VERSION })}</p>
+
                 <div className="p-4 rounded-md tac-border bg-[#121212] flex items-start gap-3">
                   <DeviceMobile size={22} className="text-[#00E5FF] shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">{t('landingGetAndroid')}</div>
                     <p className="text-xs text-[#A1A1AA] mt-1">{t('landingGetAndroidHint')}</p>
-                    {DOWNLOAD_APK_URL ? (
+                    <DownloadButton
+                      href={DOWNLOAD_APK_URL}
+                      label={t('landingDownloadApk', { version: APP_VERSION })}
+                      testId="landing-download-apk"
+                    />
+                    {DOWNLOAD_ANDROID_BETA_URL ? (
                       <a
-                        href={DOWNLOAD_APK_URL}
-                        className="inline-block mt-2 text-xs font-mono text-[#00E5FF] hover:underline"
-                        data-testid="landing-download-apk"
+                        href={DOWNLOAD_ANDROID_BETA_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-2 text-xs font-mono text-[#FFD600] hover:underline"
+                        data-testid="landing-download-beta"
                       >
-                        Download APK
+                        <UsersThree size={14} />
+                        {t('landingDownloadBeta')}
                       </a>
                     ) : null}
                   </div>
                 </div>
+
                 <div className="p-4 rounded-md tac-border bg-[#121212] flex items-start gap-3">
                   <Desktop size={22} className="text-[#00E5FF] shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">{t('landingGetWindows')}</div>
                     <p className="text-xs text-[#A1A1AA] mt-1">{t('landingGetWindowsHint')}</p>
-                    {DOWNLOAD_WIN_URL ? (
-                      <a
-                        href={DOWNLOAD_WIN_URL}
-                        className="inline-block mt-2 text-xs font-mono text-[#00E5FF] hover:underline"
-                        data-testid="landing-download-win"
-                      >
-                        Download for Windows
-                      </a>
-                    ) : null}
+                    <DownloadButton
+                      href={DOWNLOAD_WIN_URL}
+                      label={t('landingDownloadWin', { version: APP_VERSION })}
+                      testId="landing-download-win"
+                    />
                   </div>
                 </div>
+
+                {!DOWNLOAD_APK_URL && !DOWNLOAD_WIN_URL && (
+                  <p className="text-[11px] font-mono text-[#71717A]">{t('landingDownloadsPending')}</p>
+                )}
               </div>
             )}
 
@@ -179,6 +212,8 @@ export default function Landing() {
           ))}
         </div>
 
+        {!installed && <LandingScreenshots />}
+
         <section className="mt-16 rounded-md tac-border bg-[#121212] p-6 md:p-8 fade-up" style={{ animationDelay: '0.2s' }} data-testid="landing-about-section">
           <div className="grid md:grid-cols-12 gap-8">
             <div className="md:col-span-7">
@@ -208,12 +243,12 @@ export default function Landing() {
 
       <footer className="relative z-10 border-t border-[#27272A] px-6 py-6 text-xs font-mono text-[#A1A1AA] max-w-6xl mx-auto">
         <div className="flex flex-wrap justify-between gap-4 tracking-widest">
-          <span>© Super Secure Chat · supersecurechat.com</span>
+          <span>© Super Secure Chat · {SITE_ORIGIN.replace('https://', '')}</span>
           <span>v{APP_VERSION}</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-4 text-[10px] tracking-wider">
-          <Link to="/privacy" className="hover:text-white transition" data-testid="landing-privacy-link">Privacy</Link>
-          <Link to="/terms" className="hover:text-white transition" data-testid="landing-terms-link">Terms</Link>
+          <Link to="/privacy" className="hover:text-white transition" data-testid="landing-privacy-link">{t('landingNavPrivacy')}</Link>
+          <Link to="/terms" className="hover:text-white transition" data-testid="landing-terms-link">{t('landingNavTerms')}</Link>
           <a href="mailto:hello@supersecurechat.com" className="hover:text-white transition">hello@supersecurechat.com</a>
         </div>
       </footer>

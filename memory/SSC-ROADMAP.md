@@ -192,7 +192,7 @@
 |------|-------|--------|
 | **L.7** | Turnstile + API domain + TURN proof | [~] Turnstile + API domain done; TURN off-LAN pending P.6 |
 | **M** | In-app UX polish (profile, Settings, feel) | [x] M.1–M.11 done (M.6 deferred v1.1) |
-| **N** | Landing, legal, downloads, trust | [~] in progress |
+| **N** | Landing, legal, downloads, trust | [~] N.4–N.5 done; N.7 beta link pending |
 | **O** | Crypto hardening (RSA retire, group signaling, keystore) | [ ] after M/N |
 | **J** QA matrix | smashmaxxx ↔ dots — **paused** until M/O ready | [ ] |
 | **I** Infra remainder | Play Store, email routing, code-sign | [ ] |
@@ -466,11 +466,11 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | N.1 | **Privacy Policy** page `/privacy` | code | [x] |
 | N.2 | **Terms of Use** page `/terms` | code | [x] |
 | N.3 | **Landing footer** — real version, legal links, contact email | `Landing.jsx` | [x] |
-| N.4 | **Download links** on landing (`REACT_APP_DOWNLOAD_*`) | founder sets URLs + redeploy hosting | [ ] |
-| N.5 | **Landing v2** — screenshots, copy, Super Secure Chat branding | design + `Landing.jsx` | [~] branding + i18n about; screenshots pending |
-| N.6 | **`hello@supersecurechat.com`** email routing | founder: Cloudflare Email Routing | [ ] |
-| N.7 | **Firebase App Distribution** link on landing | founder: upload APK + URL | [ ] |
-| N.8 | **Play Store** listing assets | founder + TASK I.6 | [ ] |
+| N.4 | **Download links** on landing (`REACT_APP_DOWNLOAD_*`) | `scripts/prepare_downloads.ps1` + hosting | [x] `/downloads/` on Firebase Hosting |
+| N.5 | **Landing v2** — screenshots, copy, Super Secure Chat branding | `Landing.jsx`, `LandingScreenshots.jsx` | [x] |
+| N.6 | **`hello@supersecurechat.com`** email routing | founder: Cloudflare Email Routing | [ ] skipped |
+| N.7 | **Firebase App Distribution** link on landing | `scripts/upload_app_distribution.ps1` | [~] upload script; set `REACT_APP_DOWNLOAD_ANDROID_BETA_URL` |
+| N.8 | **Play Store** listing assets | founder + TASK I.6 | [ ] deferred |
 
 ---
 
@@ -672,6 +672,7 @@ yarn test:ci
 | 2026-06-26 | **TASK P.1–P.5 complete** — Turnstile live; `api.supersecurechat.com` SSL; Google OAuth redirect; v1.0.8 APK/desktop/hosting |
 | 2026-06-26 | **TASK M.7** — `POST /auth/delete-account` + Settings delete flow |
 | 2026-06-26 | **TASK M.8–M.11** — chat skeletons; Stories i18n; call status copy; `GroupManageModal` + group member API; leave-group no longer deletes conv for all |
+| 2026-06-26 | **TASK N.4–N.5** — landing download CTAs; `/downloads/` hosting; `LandingScreenshots`; `deploy_hosting.ps1` |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
