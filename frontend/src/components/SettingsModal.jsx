@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
-  X, Gear, Translate, Code, ShieldCheck, Warning, LockKey, UserCircle, Camera,
+  X, Gear, Translate, Code, ShieldCheck, LockKey, UserCircle, Camera, Bell, Lifebuoy,
 } from '@phosphor-icons/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,10 @@ import {
 import { fetchRetentionConfig } from '../lib/publicConfig';
 import Avatar from './Avatar';
 import TwoFAModal from './TwoFAModal';
+import PanicButton from './PanicButton';
+import { subscribePush } from '../lib/push';
+import { subscribeNativePush } from '../lib/native-push';
+import { isNativeApp } from '../lib/platform';
 
 const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.0';
 
@@ -40,14 +44,20 @@ function Section({ icon: Icon, title, children, testId }) {
   );
 }
 
+const SUPPORT_EMAIL = 'hello@supersecurechat.com';
+const SITE_URL = 'https://www.supersecurechat.com';
+
 export default function SettingsModal({ open, onClose }) {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, panicWipe } = useAuth();
   const { t, setLocale } = useLocale();
   const [language, setLanguage] = useState(user?.language || 'en');
   const [busy, setBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [twoFAOpen, setTwoFAOpen] = useState(false);
   const [retentionHours, setRetentionHours] = useState(24);
+  const [blockedContacts, setBlockedContacts] = useState([]);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushOk, setPushOk] = useState(false);
   const avatarInputRef = useRef(null);
 
   useEffect(() => {
@@ -65,6 +75,50 @@ export default function SettingsModal({ open, onClose }) {
     })();
     return () => { cancelled = true; };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get('/contacts');
+        if (!cancelled) {
+          setBlockedContacts((data || []).filter((c) => c.blocked));
+        }
+      } catch {
+        if (!cancelled) setBlockedContacts([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    try {
+      await subscribePush().catch(() => {});
+      const ok = await subscribeNativePush().catch(() => false);
+      if (ok || !isNativeApp()) {
+        setPushOk(true);
+        toast.success(t('settingsPushEnabled'));
+      } else {
+        toast.error(t('settingsPushFailed'));
+      }
+    } catch {
+      toast.error(t('settingsPushFailed'));
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const unblockContact = async (uid) => {
+    try {
+      await api.post(`/contacts/${uid}/unblock`);
+      setBlockedContacts((prev) => prev.filter((c) => c.user_id !== uid));
+      toast.success(t('contactUnblocked'));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || t('couldNotSave'));
+    }
+  };
 
   const saveProfile = async () => {
     setBusy(true);
@@ -221,10 +275,67 @@ export default function SettingsModal({ open, onClose }) {
                 </button>
               </div>
 
-              <div className="mt-3 p-2.5 rounded-md border border-[#FF3B30]/30 bg-[#FF3B30]/5 flex gap-2">
-                <Warning size={14} className="text-[#FF3B30] shrink-0 mt-0.5" />
-                <p className="text-[10px] text-[#A1A1AA] leading-relaxed normal-case">{t('settingsPanicHint')}</p>
+              <div className="mt-4">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-[#A1A1AA] mb-2">{t('settingsEmergency')}</p>
+                <p className="text-[10px] text-[#71717A] leading-relaxed mb-3 normal-case">{t('settingsEmergencyHint')}</p>
+                <PanicButton onWipe={panicWipe} />
               </div>
+            </Section>
+
+            <Section icon={UserCircle} title={t('settingsBlockedContacts')} testId="settings-blocked-section">
+              {blockedContacts.length === 0 ? (
+                <p className="text-xs text-[#71717A]">{t('settingsBlockedEmpty')}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {blockedContacts.map((c) => (
+                    <li
+                      key={c.user_id}
+                      className="flex items-center justify-between gap-2 p-2.5 bg-[#1A1A1A] rounded-md tac-border text-sm"
+                    >
+                      <span className="truncate font-mono">@{c.username}</span>
+                      <button
+                        type="button"
+                        onClick={() => unblockContact(c.user_id)}
+                        className="text-[10px] font-mono text-[#00E5FF] hover:underline shrink-0"
+                        data-testid={`settings-unblock-${c.user_id}`}
+                      >
+                        {t('settingsUnblock')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section icon={Bell} title={t('settingsNotifications')} testId="settings-notifications-section">
+              <button
+                type="button"
+                disabled={pushBusy || pushOk}
+                onClick={enablePush}
+                className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#27272A] rounded-md hover:bg-[#232323] disabled:opacity-50"
+                data-testid="settings-enable-push"
+              >
+                {pushBusy ? t('processing') : pushOk ? t('settingsPushEnabled') : t('settingsEnablePush')}
+              </button>
+            </Section>
+
+            <Section icon={Lifebuoy} title={t('settingsHelp')} testId="settings-help-section">
+              <p className="text-xs text-[#A1A1AA] mb-3">{t('settingsHelpHint')}</p>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                className="text-xs text-[#00E5FF] hover:underline break-all block mb-2"
+                data-testid="settings-support-email"
+              >
+                {SUPPORT_EMAIL}
+              </a>
+              <a
+                href={SITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-[#71717A] hover:text-[#A1A1AA] hover:underline break-all"
+              >
+                {SITE_URL}
+              </a>
             </Section>
 
             <Section icon={Translate} title={t('settingsPreferences')} testId="settings-preferences-section">

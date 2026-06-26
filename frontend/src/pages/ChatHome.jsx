@@ -18,6 +18,8 @@ import Avatar from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CreateGroupModal from '../components/CreateGroupModal';
 import ConversationActionsSheet, { ConversationListRow } from '../components/ConversationActionsSheet';
+import ProfileContactSheet from '../components/ProfileContactSheet';
+import ProfileContactSheet from '../components/ProfileContactSheet';
 import { useLocale } from '../context/LocaleContext';
 import { useMobileLayout } from '../lib/use-mobile';
 import MobileChatMenu, { MenuAction } from '../components/MobileChatMenu';
@@ -114,6 +116,7 @@ export default function ChatHome() {
   const [storyGroup, setStoryGroup] = useState(null);
   const [groupCallState, setGroupCallState] = useState(null); // {mode, direction, members, signal}
   const [convActionsTarget, setConvActionsTarget] = useState(null);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [reads, setReads] = useState([]); // [{user_id, last_read_message_id}]
   const [retentionHours, setRetentionHours] = useState(24);
   const socketRef = useRef(null);
@@ -299,6 +302,14 @@ export default function ChatHome() {
         setConfirmRemoveUid(null);
         return;
       }
+      if (profileSheetOpen) {
+        setProfileSheetOpen(false);
+        return;
+      }
+      if (convActionsTarget) {
+        setConvActionsTarget(null);
+        return;
+      }
       if (chatMenuOpen) {
         setChatMenuOpen(false);
         return;
@@ -349,8 +360,10 @@ export default function ChatHome() {
   }, [
     activeId,
     chatMenuOpen,
+    convActionsTarget,
     confirmRemoveUid,
     contactsOpen,
+    profileSheetOpen,
     conversationId,
     groupOpen,
     leaveChat,
@@ -1278,22 +1291,48 @@ export default function ChatHome() {
                 </button>
               )}
               <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
-                <Avatar user={isGroup ? null : peer} isGroup={isGroup} size="sm" showOnline={!isGroup} />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
-                    {headerTitle}
-                  </div>
-                  <div className="text-[10px] font-mono tracking-wider truncate flex items-center gap-1 text-[#A1A1AA]">
-                    <span className="truncate" data-testid="chat-peer-status">
-                      {isGroup
-                        ? `${activeConv.participants.length} ${t('members')}`
-                        : `${formatPeerPresence(peer)} · ${peer?.language?.toUpperCase() || '—'}`}
-                    </span>
-                    <span className="text-[#34C759]" data-testid="chat-retention-badge">
-                      · {t('retentionBadge', { hours: String(retentionHours) })}
-                    </span>
-                  </div>
-                </div>
+                {!isGroup && peer ? (
+                  <button
+                    type="button"
+                    onClick={() => setProfileSheetOpen(true)}
+                    className="flex items-center gap-2 md:gap-3 min-w-0 text-left hover:opacity-90 transition"
+                    data-testid="chat-profile-tap"
+                  >
+                    <Avatar user={peer} size="sm" showOnline />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
+                        {headerTitle}
+                      </div>
+                      <div className="text-[10px] font-mono tracking-wider truncate flex items-center gap-1 text-[#A1A1AA]">
+                        <span className="truncate" data-testid="chat-peer-status">
+                          {`${formatPeerPresence(peer)} · ${peer?.language?.toUpperCase() || '—'}`}
+                        </span>
+                        <span className="text-[#34C759]" data-testid="chat-retention-badge">
+                          · {t('retentionBadge', { hours: String(retentionHours) })}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ) : (
+                  <>
+                    <Avatar user={isGroup ? null : peer} isGroup={isGroup} size="sm" showOnline={!isGroup} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
+                        {headerTitle}
+                      </div>
+                      <div className="text-[10px] font-mono tracking-wider truncate flex items-center gap-1 text-[#A1A1AA]">
+                        <span className="truncate" data-testid="chat-peer-status">
+                          {isGroup
+                            ? `${activeConv.participants.length} ${t('members')}`
+                            : `${formatPeerPresence(peer)} · ${peer?.language?.toUpperCase() || '—'}`}
+                        </span>
+                        <span className="text-[#34C759]" data-testid="chat-retention-badge">
+                          · {t('retentionBadge', { hours: String(retentionHours) })}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 {isMobile ? (
@@ -1644,6 +1683,15 @@ export default function ChatHome() {
         onMute={toggleMute}
         onBlock={toggleBlock}
         onDelete={deleteConversation}
+      />
+
+      <ProfileContactSheet
+        open={profileSheetOpen}
+        peer={peer}
+        contact={peerContact}
+        onClose={() => setProfileSheetOpen(false)}
+        onMute={toggleMute}
+        onBlock={toggleBlock}
       />
 
       {storyGroup && (

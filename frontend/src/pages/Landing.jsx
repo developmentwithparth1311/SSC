@@ -1,5 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.7';
+const DOWNLOAD_APK_URL = process.env.REACT_APP_DOWNLOAD_APK_URL || '';
+const DOWNLOAD_WIN_URL = process.env.REACT_APP_DOWNLOAD_WIN_URL || '';
 import { ShieldCheck, Clock, Translate, Lightning, LockKey, Eye, DeviceMobile, Desktop } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 import LanguagePicker from '../components/LanguagePicker';
@@ -79,16 +83,34 @@ export default function Landing() {
                 <p className="text-sm text-[#A1A1AA]">{t('landingDownloadBody')}</p>
                 <div className="p-4 rounded-md tac-border bg-[#121212] flex items-start gap-3">
                   <DeviceMobile size={22} className="text-[#00E5FF] shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">{t('landingGetAndroid')}</div>
                     <p className="text-xs text-[#A1A1AA] mt-1">{t('landingGetAndroidHint')}</p>
+                    {DOWNLOAD_APK_URL ? (
+                      <a
+                        href={DOWNLOAD_APK_URL}
+                        className="inline-block mt-2 text-xs font-mono text-[#00E5FF] hover:underline"
+                        data-testid="landing-download-apk"
+                      >
+                        Download APK
+                      </a>
+                    ) : null}
                   </div>
                 </div>
                 <div className="p-4 rounded-md tac-border bg-[#121212] flex items-start gap-3">
                   <Desktop size={22} className="text-[#00E5FF] shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium">{t('landingGetWindows')}</div>
                     <p className="text-xs text-[#A1A1AA] mt-1">{t('landingGetWindowsHint')}</p>
+                    {DOWNLOAD_WIN_URL ? (
+                      <a
+                        href={DOWNLOAD_WIN_URL}
+                        className="inline-block mt-2 text-xs font-mono text-[#00E5FF] hover:underline"
+                        data-testid="landing-download-win"
+                      >
+                        Download for Windows
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -147,11 +169,45 @@ export default function Landing() {
             </div>
           ))}
         </div>
+
+        <section className="mt-16 rounded-md tac-border bg-[#121212] p-6 md:p-8 fade-up" style={{ animationDelay: '0.2s' }}>
+          <div className="grid md:grid-cols-12 gap-8">
+            <div className="md:col-span-7">
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-[#A1A1AA]">About the app</p>
+              <h2 className="mt-3 text-2xl md:text-3xl font-mono tracking-tight text-white">Private messaging built for speed, clarity, and control.</h2>
+              <p className="mt-4 text-sm md:text-base text-[#A1A1AA] leading-relaxed">
+                SSC is an installed-chat experience focused on encrypted conversations, fast delivery, and automatic 24-hour recycle across messages,
+                files, and call traces. The goal is simple: keep everyday communication clean and useful without creating long-term data residue.
+              </p>
+            </div>
+            <div className="md:col-span-5 grid gap-3 text-sm">
+              <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
+                <p className="font-medium text-[#F4F4F5]">No phone number required</p>
+                <p className="text-[#A1A1AA] mt-1">Account access is email/password or Google sign-in.</p>
+              </div>
+              <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
+                <p className="font-medium text-[#F4F4F5]">{t('landingAboutEphemeralTitle')}</p>
+                <p className="text-[#A1A1AA] mt-1">{t('landingAboutEphemeralBody')}</p>
+              </div>
+              <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
+                <p className="font-medium text-[#F4F4F5]">Cross-device installed clients</p>
+                <p className="text-[#A1A1AA] mt-1">Android and desktop flow, with browser-tab chat intentionally disabled.</p>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
-      <footer className="relative z-10 border-t border-[#27272A] px-6 py-6 text-xs font-mono text-[#A1A1AA] tracking-widest flex justify-between max-w-6xl mx-auto">
-        <span>© SSC · NO_PHONE_REQUIRED</span>
-        <span>v0.1 · DEFCON_READY</span>
+      <footer className="relative z-10 border-t border-[#27272A] px-6 py-6 text-xs font-mono text-[#A1A1AA] max-w-6xl mx-auto">
+        <div className="flex flex-wrap justify-between gap-4 tracking-widest">
+          <span>© Super Secure Chat · supersecurechat.com</span>
+          <span>v{APP_VERSION}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4 text-[10px] tracking-wider">
+          <Link to="/privacy" className="hover:text-white transition" data-testid="landing-privacy-link">Privacy</Link>
+          <Link to="/terms" className="hover:text-white transition" data-testid="landing-terms-link">Terms</Link>
+          <a href="mailto:hello@supersecurechat.com" className="hover:text-white transition">hello@supersecurechat.com</a>
+        </div>
       </footer>
     </div>
   );

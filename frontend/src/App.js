@@ -10,6 +10,8 @@ import SetupUsername from './pages/SetupUsername';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import ChatHome from './pages/ChatHome';
 import Landing from './pages/Landing';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 import InstalledClientGate from './components/InstalledClientGate';
 import DeepLinkListener from './components/DeepLinkListener';
 import { getSessionToken } from './lib/sessionStore';
@@ -96,6 +98,8 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route path="/login" element={<InstalledClientGate><Login /></InstalledClientGate>} />
       <Route path="/auth/google" element={<InstalledClientGate><GoogleAuthCallback /></InstalledClientGate>} />
       <Route path="/register" element={<InstalledClientGate><Register /></InstalledClientGate>} />

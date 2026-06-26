@@ -1,24 +1,25 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-26 (TASK L.6 complete; TASK L.7 started)
+**Updated:** 2026-06-26 (post-audit phase: TASK M–P; L.7 + M in progress)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
-**Companion docs:** `memory/SECURITY_MODEL.md` · `memory/UNIFIED_IDENTITY_CHARTER.md` · `memory/PRD.md`
+**Companion docs:** `memory/SECURITY_MODEL.md` · `memory/PRODUCT_BLUEPRINT.md` · `memory/UNIFIED_IDENTITY_CHARTER.md` · `memory/PRD.md`
+**Public site:** `https://www.supersecurechat.com` (Firebase Hosting)
 **Gate commands:** `backend/scripts/run_engineN_gate.py`
 
 ---
 
 ## How to use this doc
 
-1. **Done** — Engines 1–5, 8–10, 9 + TASK A–F code + **v1.0.5 rebuild** (see §Foundation, §Release v1.0.5).
-2. **Next** — **TASK L** hardening execution queue (one by one, no skips).
-3. **Then** — **Founder QA matrix (TASK J)** on smashmaxxx ↔ dots with latest builds.
-4. **Release gate** — TASK J green before Firebase testers beyond founder.
+1. **Done** — Engines 1–5, 8–10, 9 + TASK A–G code + TASK H (except H.7) + TASK L.1–L.6 + **v1.0.7** builds.
+2. **Now** — **TASK L.7** (founder infra) + **TASK M** (in-app UX polish) + **TASK N** (public surface) in parallel where possible.
+3. **Then** — **TASK O** (crypto hardening) → **TASK J** (founder QA matrix) → wider testers.
+4. **Release gate** — TASK J green + TASK N legal pages + Turnstile + API domain before public launch.
 
 **Current builds:** APK **v1.0.7** · Windows **`SSC-Setup-1.0.7.exe`** · API **`ssc-api-00016-mgl`**
 **Last deploy:** 26 Jun 2026 — Cloud Run redeploy after TASK H backend auth updates
-**Next task:** TASK L.7 — infra hardening follow-through
+**Next task:** **TASK M.1–M.4** (profile sheet, Settings pass) + **TASK L.7** (founder: Turnstile keys, `api.supersecurechat.com`)
 
 ---
 
@@ -34,6 +35,8 @@
 | **Google OAuth** | ✅ Wired (phone + desktop) | Android `chat.ssc.secure://app` · desktop `chat.ssc.secure.desktop://` |
 | **Release builds** | **v1.0.7** | APK `Desktop\SSC\APK\SSC-app-release.apk` · Win `Desktop\SSC\SSC-Setup-1.0.7.exe` |
 | **LAN dev** | ✅ Docker mongo + redis + local backend | Founder laptop only — never give LAN IP to testers |
+| **Marketing domain** | `https://www.supersecurechat.com` | Firebase Hosting custom domain — live 26 Jun 2026 |
+| **API custom domain** | Cloud Run default URL still | Target: `api.supersecurechat.com` (TASK L.7 / I.1) |
 
 ---
 
@@ -121,8 +124,14 @@
 
 | Issue | Impact |
 |-------|--------|
-| **Founder QA not run** on v1.0.5 | All A–F code is shipped but **unverified on smashmaxxx ↔ dots** |
+| **Founder QA not run** on v1.0.7 | All A–F code shipped; **device matrix (TASK J) paused** per founder |
+| **Turnstile disabled** in production | Bot registration risk until L.7 / I.2 complete |
+| **API on default Cloud Run URL** | OAuth/CORS trust gap until custom API domain (I.1) |
 | **TURN not verified** off-LAN | Video/voice may fail on cellular ↔ Wi‑Fi (TASK I.3) |
+| **Group call signaling cleartext** | Server sees SDP/ICE for group calls (TASK O.2) |
+| **Device wrap in localStorage** | Session/vault creds not hardware-backed yet (TASK O.3) |
+| **No third-party security audit** | Do not claim “audited like Signal” publicly |
+| **Retention not user-configurable** | Global 24h only; blueprint phase 2 (TASK M.6) |
 | **Kotlin/R8 metadata warnings** on APK build | Build succeeds; watch for runtime edge cases on older Android |
 | **No code signing** on Windows installer | SmartScreen will warn |
 | **iOS** | Not shipped (TASK K) |
@@ -177,14 +186,17 @@
 | **F** Block / mute / groups | ✅ | [ ] |
 | **G** OAuth + Android back | ✅ | [ ] |
 
-### Not started / deferred
+### Active phase (26 Jun 2026 audit)
 
-| Task | Scope |
-|------|-------|
-| **H** UX polish (P1) | Contact picker, header z-index, Settings pro, Google-only error copy |
-| **I** Infra | Custom domain, Turnstile, TURN, Play Store |
-| **J** QA matrix | **← YOU ARE HERE** — run on smashmaxxx + dots |
-| **K** Deferred | iOS, SFU, own-metal, email confirm |
+| Task | Scope | Status |
+|------|-------|--------|
+| **L.7** | Turnstile + API domain + TURN proof | [~] founder inputs |
+| **M** | In-app UX polish (profile, Settings, feel) | [~] in progress |
+| **N** | Landing, legal, downloads, trust | [~] in progress |
+| **O** | Crypto hardening (RSA retire, group signaling, keystore) | [ ] after M/N |
+| **J** QA matrix | smashmaxxx ↔ dots — **paused** until M/O ready | [ ] |
+| **I** Infra remainder | Play Store, email routing, code-sign | [ ] |
+| **K** Deferred | iOS, SFU, own-metal, email confirm | — |
 
 ---
 
@@ -348,7 +360,7 @@
 | H.4 | **Settings pro pass** — real version 1.0.4+, sections Profile/Security/Preferences/About | P1-7 | [x] |
 | H.5 | **Google-only account** — error “Use Google sign-in” not “invalid credentials” | P1-9 | [x] |
 | H.6 | Trim **onboarding coach** floating text in threads | P2-3 | [x] |
-| H.7 | **Profile tap** sheet (mute, block) — defer if not MVP | P1-10 | [ ] |
+| H.7 | **Profile tap** sheet (mute, block) | P1-10 | [x] → `ProfileContactSheet.jsx` (TASK M.1) |
 | H.8 | Desktop **incoming call ringtone** | P2-1 | [x] |
 
 ---
@@ -357,7 +369,7 @@
 
 | ID | Subtask | Target | Status |
 |----|---------|--------|--------|
-| I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [ ] |
+| I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [~] `www.supersecurechat.com` live; API subdomain pending |
 | I.2 | **Turnstile** captcha on production register/login | ~28 Jun 2026 | [ ] |
 | I.3 | **TURN** verification off-LAN (cellular ↔ Wi‑Fi calls) | Founder manual | [ ] |
 | I.4 | **Retention proof** — 24h delete on smashmaxxx ↔ dots thread | In progress (backend proof pass; founder thread proof pending) | [~] |
@@ -421,6 +433,105 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | L.5 | Security observability: anomaly logging/alerts for retention failures, Redis fallback, and auth abuse spikes | structured log events + documented runbook | [x] |
 | L.6 | Deploy gate hardening: fail deploy when retention proof regresses or required security env is weak | CI/script gate proof + deploy script update | [x] |
 | L.7 | Infra hardening follow-through: Turnstile production enable + TURN off-LAN verification + custom domain rollout | deploy evidence + QA evidence + roadmap update | [~] blocked: pending Turnstile keys + domain DNS + founder device off-LAN call proof |
+
+---
+
+### TASK M — In-app UX polish (phase 2) · [~] IN PROGRESS
+
+**Goal:** App feels finished — profile, Settings, trust, fewer dead ends. Aligns with `memory/PRODUCT_BLUEPRINT.md` §UX.
+
+| ID | Subtask | Files / notes | Status |
+|----|---------|---------------|--------|
+| M.1 | **Profile tap sheet** — avatar/name in chat header → mute/block | `ProfileContactSheet.jsx`, `ChatHome.jsx` | [x] |
+| M.2 | **Settings: blocked contacts list** + unblock | `SettingsModal.jsx` | [x] |
+| M.3 | **Settings: panic wipe** in Security section | `SettingsModal.jsx`, `PanicButton.jsx` | [x] |
+| M.4 | **Settings: push enable** + help/support link | `SettingsModal.jsx` | [x] |
+| M.5 | **Change password** (password accounts only) | `auth` router + Settings | [ ] |
+| M.6 | **User retention picker** (1h / 6h / 24h / 7d) | backend policy + Settings | [ ] deferred v1.1 |
+| M.7 | **Delete account** flow | backend + Settings + confirm | [ ] before public |
+| M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [ ] |
+| M.9 | **Stories UX pass** — views, delete, navigation | `Stories.jsx` | [ ] |
+| M.10 | **Calls visual polish** — failed/reconnect copy | `CallModal.jsx` | [ ] |
+| M.11 | **Group admin** — rename, add/remove members | `ChatHome.jsx`, API | [ ] |
+| M.12 | **Last-seen privacy toggle** | Settings + API | [ ] v2 |
+
+---
+
+### TASK N — Public surface & trust · [~] IN PROGRESS
+
+**Goal:** `supersecurechat.com` ready for testers and store review.
+
+| ID | Subtask | Owner | Status |
+|----|---------|-------|--------|
+| N.1 | **Privacy Policy** page `/privacy` | code | [x] |
+| N.2 | **Terms of Use** page `/terms` | code | [x] |
+| N.3 | **Landing footer** — real version, legal links, contact email | `Landing.jsx` | [x] |
+| N.4 | **Download links** on landing (`REACT_APP_DOWNLOAD_*`) | founder sets URLs + redeploy hosting | [ ] |
+| N.5 | **Landing v2** — screenshots, copy, Super Secure Chat branding | design + `Landing.jsx` | [ ] |
+| N.6 | **`hello@supersecurechat.com`** email routing | founder: Cloudflare Email Routing | [ ] |
+| N.7 | **Firebase App Distribution** link on landing | founder: upload APK + URL | [ ] |
+| N.8 | **Play Store** listing assets | founder + TASK I.6 | [ ] |
+
+---
+
+### TASK O — Crypto & security hardening (code) · NOT STARTED
+
+**Goal:** Close gaps from 26 Jun security audit before public launch. See §Security audit grades.
+
+| ID | Subtask | Risk addressed | Status |
+|----|---------|----------------|--------|
+| O.1 | **Retire RSA send path** on installed clients (read-only legacy decrypt) | dual-crypto surface | [ ] |
+| O.2 | **Encrypt group call signaling** (Sender Keys wrap) | cleartext SDP on server | [ ] |
+| O.3 | **Hardware-backed device wrap** — Android Keystore + Electron safeStorage | localStorage theft | [ ] |
+| O.4 | **Remove dead VERIFY/badge components** or wire to advanced Settings | dev confusion | [ ] |
+| O.5 | **Third-party pen test** or structured self-audit checklist | marketing trust | [ ] founder budget |
+| O.6 | **Mongo network tighten** (private endpoint or IP allowlist) | credential leak blast radius | [ ] post-scale |
+
+---
+
+### TASK P — Founder setup checklist (infra — you do these)
+
+**Goal:** Unblock L.7 / I / N without code. Check off as completed; log evidence in `test_reports/`.
+
+| # | Action | Where | Blocks |
+|---|--------|-------|--------|
+| P.1 | Create **Cloudflare Turnstile** site + secret keys | Cloudflare dashboard | L.7, I.2, bot abuse |
+| P.2 | Add keys to `backend/cloud_run.env` + `REACT_APP_TURNSTILE_SITEKEY` | redeploy API + rebuild clients | L.7 |
+| P.3 | Map **`api.supersecurechat.com`** → Cloud Run | GCP + Cloudflare DNS | L.7, I.1 |
+| P.4 | Update **Google OAuth** authorized domains + redirect URI | Google Cloud Console | OAuth on new API domain |
+| P.5 | Update **CORS_ORIGINS** + `REACT_APP_BACKEND_URL` | `cloud_run.env` + frontend env | clients |
+| P.6 | **TURN off-LAN call test** (cellular ↔ Wi‑Fi) | smashmaxxx ↔ dots | I.3, L.7 |
+| P.7 | **Cloudflare Email Routing** for `hello@` | Cloudflare | N.6 |
+| P.8 | **Windows code signing** cert (optional) | SSL.com / DigiCert | SmartScreen |
+| P.9 | **Play Console** developer account ($25) | Google Play | I.6 |
+| P.10 | **GCP log alerts** per `SECURITY_OBSERVABILITY_RUNBOOK.md` | Cloud Logging | ops |
+
+---
+
+## Security audit snapshot (26 Jun 2026)
+
+| Layer | Grade | Notes |
+|-------|-------|-------|
+| Crypto design (installed) | **A-** | libsignal 0.96.2; contact-gated prekeys |
+| Server exposure | **B** | ciphertext messages; group call SDP gap |
+| Abuse resistance | **B-** | rate limits ✅; Turnstile ❌ |
+| Client secret storage | **B-** | AES device wrap in localStorage |
+| Product UX | **C+** → target **B** after TASK M |
+| Public launch readiness | **D+** → target **B-** after M+N+O+P |
+
+**Marketing rule (unchanged):** Signal-grade E2E on **installed apps** — not browser tab; not “audited like Signal” until O.5.
+
+---
+
+## Phased execution order (locked 26 Jun 2026)
+
+```
+Phase 1 — Trust perimeter (TASK P + L.7 + N.4–N.7)     ← founder + deploy
+Phase 2 — In-app polish (TASK M)                        ← code [~]
+Phase 3 — Crypto hardening (TASK O)                     ← code
+Phase 4 — Founder QA (TASK J)                           ← devices (when ready)
+Phase 5 — Wider testers + Play Store (I.6, N.8)         ← launch
+```
 
 ---
 
@@ -553,6 +664,8 @@ yarn test:ci
 | 2026-06-26 | **TASK L.5 complete** — security observability hooks added (`core/security_observability.py`) for Redis fallback + retention janitor anomalies, with operational runbook `memory/SECURITY_OBSERVABILITY_RUNBOOK.md`; smoke evidence saved to `test_reports/security_observability_smoke_2026-06-26.log` |
 | 2026-06-26 | **TASK L.6 complete** — deploy gate hardened in `scripts/prepare_cloud_run_deploy.py` (strict env validation + mandatory retention proof gate); evidence saved to `test_reports/deploy_gate_hardening_2026-06-26.md` |
 | 2026-06-26 | **TASK L.7 in progress (blocked)** — production confirms Turnstile disabled and Cloud Run default domain still active; TURN creds present but off-LAN device proof pending. Blockers/evidence logged in `test_reports/infra_hardening_l7_status_2026-06-26.md` |
+| 2026-06-26 | **Post-audit roadmap** — TASK M (UX), N (public), O (crypto hardening), P (founder infra checklist) added; `PRODUCT_BLUEPRINT.md` aligned |
+| 2026-06-26 | **TASK M.1–M.4** — `ProfileContactSheet.jsx`; Settings blocked list, panic in Settings, push enable, help link; `/privacy` + `/terms`; landing footer + legal links |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
