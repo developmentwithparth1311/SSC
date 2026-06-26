@@ -22,6 +22,8 @@ import PanicButton from './PanicButton';
 import { subscribePush } from '../lib/push';
 import { subscribeNativePush } from '../lib/native-push';
 import { isNativeApp } from '../lib/platform';
+import { unwrapPrivateKey, wrapPrivateKey } from '../lib/crypto';
+import { saveVaultCredential } from '../lib/vaultCredentialStore';
 
 const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.0';
 
@@ -58,7 +60,13 @@ export default function SettingsModal({ open, onClose }) {
   const [blockedContacts, setBlockedContacts] = useState([]);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushOk, setPushOk] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwBusy, setPwBusy] = useState(false);
   const avatarInputRef = useRef(null);
+
+  const canChangePassword = user?.auth_provider === 'password';
 
   useEffect(() => {
     if (open && user) {
@@ -107,6 +115,45 @@ export default function SettingsModal({ open, onClose }) {
       toast.error(t('settingsPushFailed'));
     } finally {
       setPushBusy(false);
+    }
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    if (pwNew.length < 8) {
+      toast.error(t('settingsPasswordTooShort'));
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      toast.error(t('settingsPasswordMismatch'));
+      return;
+    }
+    if (!user?.encrypted_private_key || !user?.pk_salt) {
+      toast.error(t('settingsPasswordNoVault'));
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const pk = await unwrapPrivateKey(user.encrypted_private_key, user.pk_salt, pwCurrent);
+      const jwk = await crypto.subtle.exportKey('jwk', pk);
+      const wrapped = await wrapPrivateKey(jwk, pwNew);
+      await api.post('/auth/change-password', {
+        current_password: pwCurrent,
+        new_password: pwNew,
+        encrypted_private_key: wrapped.encrypted_private_key,
+        pk_salt: wrapped.pk_salt,
+      });
+      if (user?.user_id) await saveVaultCredential(user.user_id, pwNew);
+      await refreshUser();
+      setPwCurrent('');
+      setPwNew('');
+      setPwConfirm('');
+      toast.success(t('settingsPasswordChanged'));
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      toast.error(detail || t('settingsPasswordFailed'));
+    } finally {
+      setPwBusy(false);
     }
   };
 
@@ -263,6 +310,47 @@ export default function SettingsModal({ open, onClose }) {
                   </span>
                 </div>
               </div>
+
+              {canChangePassword && (
+                <form onSubmit={changePassword} className="mt-3 space-y-2" data-testid="settings-change-password-form">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-[#A1A1AA]">{t('settingsChangePassword')}</p>
+                  <input
+                    type="password"
+                    value={pwCurrent}
+                    onChange={(e) => setPwCurrent(e.target.value)}
+                    placeholder={t('settingsCurrentPassword')}
+                    className="w-full px-3 py-2 text-sm bg-[#1A1A1A] border border-[#27272A] rounded-md"
+                    autoComplete="current-password"
+                    data-testid="settings-current-password"
+                  />
+                  <input
+                    type="password"
+                    value={pwNew}
+                    onChange={(e) => setPwNew(e.target.value)}
+                    placeholder={t('settingsNewPassword')}
+                    className="w-full px-3 py-2 text-sm bg-[#1A1A1A] border border-[#27272A] rounded-md"
+                    autoComplete="new-password"
+                    data-testid="settings-new-password"
+                  />
+                  <input
+                    type="password"
+                    value={pwConfirm}
+                    onChange={(e) => setPwConfirm(e.target.value)}
+                    placeholder={t('settingsConfirmPassword')}
+                    className="w-full px-3 py-2 text-sm bg-[#1A1A1A] border border-[#27272A] rounded-md"
+                    autoComplete="new-password"
+                    data-testid="settings-confirm-password"
+                  />
+                  <button
+                    type="submit"
+                    disabled={pwBusy || !pwCurrent || pwNew.length < 8 || pwNew !== pwConfirm}
+                    className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#27272A] rounded-md hover:bg-[#232323] disabled:opacity-40"
+                    data-testid="settings-change-password-submit"
+                  >
+                    {pwBusy ? t('processing') : t('settingsChangePasswordSubmit')}
+                  </button>
+                </form>
+              )}
 
               <div className="flex flex-col gap-2 mt-3">
                 <button

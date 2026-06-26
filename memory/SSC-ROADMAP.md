@@ -446,7 +446,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | M.2 | **Settings: blocked contacts list** + unblock | `SettingsModal.jsx` | [x] |
 | M.3 | **Settings: panic wipe** in Security section | `SettingsModal.jsx`, `PanicButton.jsx` | [x] |
 | M.4 | **Settings: push enable** + help/support link | `SettingsModal.jsx` | [x] |
-| M.5 | **Change password** (password accounts only) | `auth` router + Settings | [ ] |
+| M.5 | **Change password** (password accounts only) | `auth` router + Settings | [x] |
 | M.6 | **User retention picker** (1h / 6h / 24h / 7d) | backend policy + Settings | [ ] deferred v1.1 |
 | M.7 | **Delete account** flow | backend + Settings + confirm | [ ] before public |
 | M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [~] Message decrypt retry + i18n |
@@ -666,6 +666,8 @@ yarn test:ci
 | 2026-06-26 | **TASK L.7 in progress (blocked)** — production confirms Turnstile disabled and Cloud Run default domain still active; TURN creds present but off-LAN device proof pending. Blockers/evidence logged in `test_reports/infra_hardening_l7_status_2026-06-26.md` |
 | 2026-06-26 | **Post-audit roadmap** — TASK M (UX), N (public), O (crypto hardening), P (founder infra checklist) added; `PRODUCT_BLUEPRINT.md` aligned |
 | 2026-06-26 | **TASK M.1–M.4** — `ProfileContactSheet.jsx`; Settings blocked list, panic in Settings, push enable, help link; `/privacy` + `/terms`; landing footer + legal links |
+| 2026-06-26 | **TASK M.8** — message decrypt retry, slow-timeout hint, i18n error copy (`Message.jsx`) |
+| 2026-06-26 | **TASK M.5** — `POST /auth/change-password` + Settings form for password accounts |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |

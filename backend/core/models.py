@@ -79,6 +79,13 @@ class TwoFADisableIn(BaseModel):
     code: str
 
 
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    encrypted_private_key: str = Field(min_length=16, max_length=20000)
+    pk_salt: str = Field(min_length=8, max_length=256)
+
+
 class PushSubscribeIn(BaseModel):
     endpoint: str
     keys: Dict[str, str]

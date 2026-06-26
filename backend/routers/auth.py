@@ -22,6 +22,7 @@ from core.token_revocation import revoke_token
 from core.ws_tickets import issue_ws_ticket
 from core.database import db
 from core.models import (
+    ChangePasswordIn,
     FinishGoogleSetupIn,
     GoogleOAuthExchangeIn,
     GoogleSessionIn,
@@ -304,6 +305,30 @@ async def google_finish_setup(body: FinishGoogleSetupIn, current=Depends(get_cur
         {"_id": 0, "password_hash": 0, "totp_secret": 0, "totp_pending_secret": 0},
     )
     return user
+
+
+@router.post("/change-password")
+async def change_password(body: ChangePasswordIn, current=Depends(get_current_user)):
+    if not rate_limit_check(f"change_pw:{current['user_id']}", max_hits=5, window_sec=3600):
+        raise HTTPException(429, "Too many password change attempts — try again later")
+    doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "User not found")
+    if doc.get("auth_provider") == "google" and not doc.get("password_hash"):
+        raise HTTPException(400, "This account uses Google sign-in — password cannot be changed here")
+    if not doc.get("password_hash") or not verify_password(body.current_password, doc["password_hash"]):
+        raise HTTPException(401, "Current password is incorrect")
+    if body.current_password == body.new_password:
+        raise HTTPException(400, "New password must be different from the current password")
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "password_hash": hash_password(body.new_password),
+            "encrypted_private_key": body.encrypted_private_key,
+            "pk_salt": body.pk_salt,
+        }},
+    )
+    return {"ok": True}
 
 
 @router.post("/2fa/setup")
