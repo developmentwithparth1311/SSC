@@ -17,9 +17,9 @@
 3. **Then** — **TASK O** (crypto hardening) → **TASK J** (founder QA matrix) → wider testers.
 4. **Release gate** — TASK J green + TASK N legal pages + Turnstile + API domain before public launch.
 
-**Current builds:** APK **v1.0.7** · Windows **`SSC-Setup-1.0.7.exe`** · API **`ssc-api-00017-whm`**
-**Last deploy:** 26 Jun 2026 — Cloud Run redeploy after TASK H backend auth updates
-**Next task:** **TASK M** (remaining UX) + **TASK P.4/P.6** (OAuth redirect, TURN off-LAN proof) + rebuild APK/desktop for Turnstile
+**Current builds:** APK **v1.0.8** · Windows **`SSC-Setup-1.0.8.exe`** · API **`ssc-api-00019-4zf`**
+**Last deploy:** 26 Jun 2026 — OAuth on api.supersecurechat.com, delete-account, v1.0.8 clients
+**Next task:** **TASK M** (M.9–M.11) + **P.6** TURN off-LAN proof + **TASK J** founder QA
 
 ---
 
@@ -27,7 +27,7 @@
 
 | Service | URL / status | Notes |
 |---------|----------------|-------|
-| **Production API** | `https://ssc-api-4jp3wuccwa-ew.a.run.app` | Cloud Run **`ssc-api-00017-whm`** · `env=production` · mongo ✅ · redis ✅ |
+| **Production API** | `https://api.supersecurechat.com` | Cloud Run **`ssc-api-00019-4zf`** · `env=production` · mongo ✅ · redis ✅ |
 | **Firebase project** | `super-chat-b0992` | App Distribution, FCM push, Hosting (`super-chat-b0992.web.app`) |
 | **MongoDB** | Atlas `ssc` cluster | Network: allow Cloud Run (0.0.0.0/0) |
 | **Redis** | Upstash (production) | Required for `ENV=production` |
@@ -36,7 +36,7 @@
 | **Release builds** | **v1.0.7** | APK `Desktop\SSC\APK\SSC-app-release.apk` · Win `Desktop\SSC\SSC-Setup-1.0.7.exe` |
 | **LAN dev** | ✅ Docker mongo + redis + local backend | Founder laptop only — never give LAN IP to testers |
 | **Marketing domain** | `https://www.supersecurechat.com` | Firebase Hosting custom domain — live 26 Jun 2026 |
-| **API custom domain** | Cloud Run default URL still | Target: `api.supersecurechat.com` (TASK L.7 / I.1) |
+| **API custom domain** | `https://api.supersecurechat.com` | SSL live · OAuth redirect migrated (P.4–P.5) |
 
 ---
 
