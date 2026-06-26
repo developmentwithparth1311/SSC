@@ -10,19 +10,19 @@ $WinSrc = "C:\Users\smash\Desktop\SSC\SSC-Setup-1.0.8.exe"
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 
 if (-not (Test-Path $ApkSrc)) {
-    Write-Warning "APK not found: $ApkSrc — build with SSC-BUILD-APK.bat first"
+    Write-Warning "APK not found: $ApkSrc - build with SSC-BUILD-APK.bat first"
 } else {
     Copy-Item -Force $ApkSrc (Join-Path $Dest "SSC-app-release.apk")
     $mb = [math]::Round((Get-Item $ApkSrc).Length / 1MB, 1)
-    Write-Host "OK: APK copied ($mb MB)"
+    Write-Host "OK: APK copied (${mb} MB)"
 }
 
 if (-not (Test-Path $WinSrc)) {
-    Write-Warning "Windows installer not found: $WinSrc — build with SSC-BUILD-DESKTOP-WIN.bat first"
+    Write-Warning "Windows installer not found: $WinSrc - build with SSC-BUILD-DESKTOP-WIN.bat first"
 } else {
     Copy-Item -Force $WinSrc (Join-Path $Dest "SSC-Setup-1.0.8.exe")
-    $mb = [math]::Round((Get-Item $WinSrc).Length / 1MB, 1)
-    Write-Host "OK: Windows installer copied ($mb MB)"
+    $mbWin = [math]::Round((Get-Item $WinSrc).Length / 1MB, 1)
+    Write-Host "OK: Windows installer copied (${mbWin} MB)"
 }
 
 Write-Host "Downloads folder: $Dest"
