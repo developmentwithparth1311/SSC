@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-26 (Cloud Run redeploy + TASK I.7 complete)
+**Updated:** 2026-06-26 (production retention proof + auth smoke verified)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -360,7 +360,7 @@
 | I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [ ] |
 | I.2 | **Turnstile** captcha on production register/login | ~28 Jun 2026 | [ ] |
 | I.3 | **TURN** verification off-LAN (cellular ↔ Wi‑Fi calls) | Founder manual | [ ] |
-| I.4 | **Retention proof** — 24h delete on smashmaxxx ↔ dots thread | In progress | [~] |
+| I.4 | **Retention proof** — 24h delete on smashmaxxx ↔ dots thread | In progress (backend proof pass; founder thread proof pending) | [~] |
 | I.5 | Rebuild **APK + desktop** after TASK batches; bump version | Post-fix | [x] |
 | I.6 | **Play Store** listing (AGPL review ✅) | Post-P0 | [ ] |
 | I.7 | Redeploy Cloud Run when backend changes | Per deploy | [x] |
@@ -375,7 +375,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 |------|------|------------|--------|
 | Auth | Google login both devices | — | [x] |
 | Auth | Stay logged in after force-close | TASK B | [x] code · [ ] founder retest |
-| Auth | Google-only email login shows friendly error | TASK H.5 | [ ] |
+| Auth | Google-only email login shows friendly error | TASK H.5 | [x] backend smoke · [ ] founder retest |
 | Contacts | Friend request live (send + accept) | TASK C | [x] code · [ ] founder retest |
 | Chat | 1:1 text real-time | — | [x] |
 | Chat | No vault / legacy / upgrade UI | TASK A | [x] code · [ ] founder retest |
@@ -528,6 +528,8 @@ yarn test:ci
 | 2026-06-26 | **TASK H.8 complete** — verified desktop incoming ringtone wiring (`callRingtone.js` + incoming-call state in chat) |
 | 2026-06-26 | **TASK I.5 complete** — Windows desktop installer + Android APK/AAB rebuilt (`SSC-Setup-1.0.7.exe`, `SSC-app-release.apk`, `SSC-app-release.aab`) |
 | 2026-06-26 | **TASK I.7 complete** — Cloud Run redeployed to revision `ssc-api-00016-mgl` (`https://ssc-api-4jp3wuccwa-ew.a.run.app`) |
+| 2026-06-26 | **TASK I.4 progress** — production retention proof PASS (TTL indexes + expires_at coverage + expired rows=0) saved to `test_reports/retention_proof_2026-06-26.json`; founder 24h thread proof still pending |
+| 2026-06-26 | **TASK J auth smoke** — production `/api/auth/login` returns `401` + `x-auth-provider: google` with friendly Google-only guidance |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
