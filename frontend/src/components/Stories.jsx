@@ -13,12 +13,14 @@ import {
 } from '../lib/signal/statuses';
 import { subscribeMemoryWipe } from '../lib/memoryWipe';
 import Avatar from './Avatar';
+import { useLocale } from '../context/LocaleContext';
 
 /**
  * Stories bar: horizontal scroll at top of sidebar with avatars.
  * Click "+" to create a status; click an avatar to view their 24h stories.
  */
 export function StoriesBar({ me, privateKey, onView, onStatusesChange }) {
+  const { t } = useLocale();
   const [statuses, setStatuses] = useState([]);
   const [creatorOpen, setCreatorOpen] = useState(false);
 
@@ -69,7 +71,7 @@ export function StoriesBar({ me, privateKey, onView, onStatusesChange }) {
             <div className="w-12 h-12 rounded-full bg-[#1A1A1A] tac-border flex items-center justify-center group-hover:bg-[#232323] transition">
               <Plus size={18} className="text-[#00E5FF]" />
             </div>
-            <span className="text-[9px] font-mono text-[#A1A1AA] tracking-wider">ADD</span>
+            <span className="text-[9px] font-mono text-[#A1A1AA] tracking-wider">{t('storyAdd')}</span>
           </button>
           {ordered.map((g) => (
             <button key={g.author_id} onClick={() => onView && onView({ ...g, onDeleted: removeStatus })} data-testid={`story-${g.author_username}`}
@@ -84,7 +86,7 @@ export function StoriesBar({ me, privateKey, onView, onStatusesChange }) {
                 </div>
               </div>
               <span className="text-[9px] font-mono text-[#A1A1AA] tracking-wider truncate max-w-[64px]">
-                {g.author_id === me?.user_id ? 'YOU' : g.author_username.toUpperCase()}
+                {g.author_id === me?.user_id ? t('storyYou') : g.author_username.toUpperCase()}
               </span>
             </button>
           ))}
@@ -97,6 +99,7 @@ export function StoriesBar({ me, privateKey, onView, onStatusesChange }) {
 
 // ─── Creator ─────────────────────────────────────────────────────────────────
 function StoryCreator({ open, onClose, me, onCreated }) {
+  const { t } = useLocale();
   const [text, setText] = useState('');
   const [bg, setBg] = useState('#1E2A38');
   const [busy, setBusy] = useState(false);
@@ -152,12 +155,12 @@ function StoryCreator({ open, onClose, me, onCreated }) {
           background: bg,
         });
       }
-      toast.success('Status posted · auto-deletes in 24h');
+      toast.success(t('storyPosted'));
       onCreated && onCreated();
       onClose && onClose();
     } catch (e) {
       console.error(e);
-      toast.error('Failed to post status');
+      toast.error(t('storyPostFailed'));
     } finally { setBusy(false); }
   };
 
@@ -166,12 +169,12 @@ function StoryCreator({ open, onClose, me, onCreated }) {
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-md bg-[#121212] tac-border rounded-md p-5 fade-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-mono text-xs tracking-[0.25em]">NEW_STATUS</h3>
+          <h3 className="font-mono text-xs tracking-[0.25em]">{t('storyNewTitle')}</h3>
           <button onClick={onClose} className="text-[#A1A1AA] hover:text-white" data-testid="story-creator-close"><X size={16} /></button>
         </div>
         <div className="rounded-md aspect-[4/5] flex items-center justify-center p-6 mb-3" style={{ backgroundColor: bg }} data-testid="story-preview">
           <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 280))}
-            placeholder="What's on your mind?"
+            placeholder={t('storyPlaceholder')}
             className="w-full h-full bg-transparent border-0 outline-none resize-none text-center font-mono text-xl leading-relaxed text-white placeholder:text-white/40" data-testid="story-text-input" />
         </div>
         <div className="flex items-center gap-2 mb-4">
@@ -180,11 +183,11 @@ function StoryCreator({ open, onClose, me, onCreated }) {
           ))}
         </div>
         <p className="text-[10px] font-mono text-[#A1A1AA] tracking-widest mb-3 text-center">
-          E2E ENCRYPTED · VISIBLE TO {contacts.filter(c => !c.blocked).length} CONTACTS · AUTO-DELETES IN 24H
+          {t('storyAudienceHint', { count: String(contacts.filter((c) => !c.blocked).length) })}
         </p>
         <button onClick={submit} disabled={!text.trim() || busy || contacts.filter(c => !c.blocked).length === 0} data-testid="story-post-button"
           className="w-full py-2.5 bg-[#00E5FF] text-black font-medium text-sm rounded-md hover:brightness-110 transition disabled:opacity-40">
-          {busy ? 'ENCRYPTING…' : contacts.filter(c => !c.blocked).length === 0 ? 'NO CONTACTS YET' : 'POST STATUS'}
+          {busy ? t('storyPostBusy') : contacts.filter((c) => !c.blocked).length === 0 ? t('storyNoContacts') : t('storyPost')}
         </button>
       </div>
     </div>
@@ -193,6 +196,7 @@ function StoryCreator({ open, onClose, me, onCreated }) {
 
 // ─── Viewer ──────────────────────────────────────────────────────────────────
 export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
+  const { t } = useLocale();
   const [idx, setIdx] = useState(0);
   const [decoded, setDecoded] = useState('');
   const [progress, setProgress] = useState(0);
@@ -205,6 +209,13 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
     setViewersCount(cur?.viewers?.length || 0);
   }, [cur?.status_id, cur?.viewers?.length]);
 
+  useEffect(() => {
+    if (!group) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [group, onClose]);
+
   useEffect(() => subscribeMemoryWipe(() => {
     setDecoded('');
     setIdx(0);
@@ -215,10 +226,10 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
   useEffect(() => {
     if (!cur) return;
     if (!isSignalStatusV1(cur) && !privateKey) {
-      setDecoded('[encrypted — reopen app to unlock]');
+      setDecoded(t('storyVaultLocked'));
       return;
     }
-    setDecoded('decrypting…');
+    setDecoded(t('storyDecrypting'));
     let cancelled = false;
     (async () => {
       try {
@@ -227,7 +238,7 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
           pt = await decryptStatusText(cur.author_id, cur);
         } else {
           const key = cur.encrypted_keys?.[me.user_id];
-          if (!key) { if (!cancelled) setDecoded('[no key for this device]'); return; }
+          if (!key) { if (!cancelled) setDecoded(t('storyNoKey')); return; }
           pt = await decryptMessage(privateKey, cur.ciphertext, cur.iv, key);
         }
         if (!cancelled) setDecoded(pt || '');
@@ -238,7 +249,7 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
           } catch {}
         }
       } catch (e) {
-        if (!cancelled) setDecoded('[unable to decrypt]');
+        if (!cancelled) setDecoded(t('storyDecryptFailed'));
       }
     })();
     // auto-advance after 6s
@@ -280,15 +291,15 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
 
   const del = async () => {
     if (!cur || cur.author_id !== me?.user_id) return;
-    if (!window.confirm('Delete this status?')) return;
+    if (!window.confirm(t('storyDeleteConfirm'))) return;
     try {
       await api.delete(`/statuses/${cur.status_id}`);
       onDeleted?.(cur.status_id);
       group.onDeleted?.(cur.status_id);
-      toast.success('Deleted');
+      toast.success(t('storyDeleted'));
       onClose && onClose();
     } catch {
-      toast.error('Could not delete status');
+      toast.error(t('storyDeleteFailed'));
     }
   };
 
@@ -323,7 +334,7 @@ export function StoryViewer({ group, onClose, onDeleted, me, privateKey }) {
 
         {cur.author_id === me?.user_id && (
           <div className="absolute bottom-3 left-3 z-10 flex items-center gap-1 text-[10px] font-mono text-white/70 tracking-widest" data-testid="story-viewers-count">
-            <Eye size={12} /> {viewersCount} VIEWED
+            <Eye size={12} /> {t('storyViewed', { count: String(viewersCount) })}
           </div>
         )}
       </div>

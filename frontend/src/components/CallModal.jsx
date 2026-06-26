@@ -58,6 +58,7 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
   const cameraFacingRef = useRef(DEFAULT_CAMERA_FACING);
   const renegotiatingRef = useRef(false);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'ringing');
+  const [endReason, setEndReason] = useState('');
   const [activeMode, setActiveMode] = useState(mode);
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
@@ -127,7 +128,19 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') setStatus('connected');
-      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) onClose && onClose();
+      if (pc.connectionState === 'failed') {
+        setEndReason('failed');
+        setStatus('ended');
+        toast.error(t('callStatusFailed'));
+        setTimeout(() => onClose?.(), 1800);
+      } else if (pc.connectionState === 'disconnected') {
+        setEndReason('disconnected');
+        setStatus('ended');
+        toast.message(t('callPeerDisconnected'));
+        setTimeout(() => onClose?.(), 1500);
+      } else if (pc.connectionState === 'closed') {
+        onClose?.();
+      }
     };
 
     try {
@@ -213,9 +226,14 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       } else if (data.type === 'ice-candidate' && data.from === peer.user_id) {
         try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
       } else if (data.type === 'call-end' && data.from === peer.user_id) {
-        onClose && onClose();
+        setEndReason('ended');
+        setStatus('ended');
+        setTimeout(() => onClose?.(), 800);
       } else if (data.type === 'call-reject' && data.from === peer.user_id) {
-        onClose && onClose();
+        setEndReason('declined');
+        setStatus('ended');
+        toast.message(t('callStatusDeclined'));
+        setTimeout(() => onClose?.(), 1500);
       }
     };
     window.addEventListener('ssc-signal', handler);
@@ -297,6 +315,17 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
 
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
+  const statusLabel = () => {
+    if (status === 'connected') return `E2E · ${fmt(duration)}`;
+    if (status === 'calling') return t('callStatusCalling');
+    if (status === 'ringing') return t('callStatusRinging');
+    if (endReason === 'declined') return t('callStatusDeclined');
+    if (endReason === 'failed') return t('callStatusFailed');
+    if (endReason === 'disconnected') return t('callPeerDisconnected');
+    if (endReason === 'ended') return t('callStatusEnded');
+    return status.toUpperCase();
+  };
+
   const stageClass = isMobile
     ? 'relative flex-1 w-full min-h-0 bg-[#0A0A0A]'
     : 'relative w-full max-w-3xl aspect-video bg-[#121212] rounded-md tac-border';
@@ -342,8 +371,8 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
             data-testid="call-local-video"
           />
         )}
-        <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 rounded font-mono text-[10px] tracking-widest text-[#A1A1AA] z-10">
-          {status === 'connected' ? `E2E · ${fmt(duration)}` : status.toUpperCase()}
+        <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 rounded font-mono text-[10px] tracking-widest text-[#A1A1AA] z-10" data-testid="call-status-label">
+          {statusLabel()}
         </div>
         {activeMode === 'video' && videoOff && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#121212]/80 z-[5] pointer-events-none">

@@ -92,6 +92,10 @@ class DeleteAccountIn(BaseModel):
     totp_code: Optional[str] = None
 
 
+class AddGroupMembersIn(BaseModel):
+    peer_usernames: List[str] = Field(min_length=1, max_length=20)
+
+
 class PushSubscribeIn(BaseModel):
     endpoint: str
     keys: Dict[str, str]

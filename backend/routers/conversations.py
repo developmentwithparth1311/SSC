@@ -7,7 +7,8 @@ from core.auth import get_current_user
 from core.contact_helpers import PEER_ROSTER_FIELDS, are_contacts
 from core.database import db
 from core.logging_config import logger
-from core.models import CreateConversationIn
+from core.group_members import add_group_members, remove_group_member
+from core.models import AddGroupMembersIn, CreateConversationIn
 from core.push_helpers import send_push_for_group_added
 from core.realtime import manager
 from core.last_seen import project_user_for_peer
@@ -183,6 +184,72 @@ async def get_reads(conversation_id: str, current=Depends(get_current_user)):
         raise HTTPException(404, "Conversation not found")
     reads = await db.message_reads.find({"conversation_id": conversation_id}, {"_id": 0}).to_list(50)
     return reads
+
+
+@router.post("/{conversation_id}/members")
+async def add_conversation_members(
+    conversation_id: str,
+    body: AddGroupMembersIn,
+    current=Depends(get_current_user),
+):
+    conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
+    if not conv or current["user_id"] not in conv.get("participants", []):
+        raise HTTPException(404, "Conversation not found")
+    if not conv.get("is_group"):
+        raise HTTPException(400, "Not a group conversation")
+    if conv.get("admin_id") != current["user_id"]:
+        raise HTTPException(403, "Only the group creator can add members")
+    usernames = [u.strip() for u in body.peer_usernames if u and u.strip()]
+    usernames = [u for u in usernames if u != current["username"]]
+    if not usernames:
+        raise HTTPException(400, "No usernames provided")
+    peers = await db.users.find(
+        {"username": {"$in": usernames}},
+        {"_id": 0, "password_hash": 0, "totp_secret": 0, "totp_pending_secret": 0},
+    ).to_list(50)
+    found = {p["username"] for p in peers}
+    missing = [u for u in usernames if u not in found]
+    if missing:
+        raise HTTPException(404, f"Unknown users: {', '.join(missing)}")
+    try:
+        conv = await add_group_members(conv, actor_id=current["user_id"], peer_docs=peers)
+    except ValueError as e:
+        raise HTTPException(403, str(e)) from e
+    me = current["user_id"]
+    member_map = {current["user_id"]: peer_summary(current)}
+    for p in peers:
+        member_map[p["user_id"]] = peer_summary(p)
+    members = [member_map[uid] for uid in conv["participants"] if uid != me and uid in member_map]
+    return sanitize_conversation_for_api({**conv, "members": members}, me)
+
+
+@router.delete("/{conversation_id}/members/{user_id}")
+async def remove_conversation_member(
+    conversation_id: str,
+    user_id: str,
+    current=Depends(get_current_user),
+):
+    conv = await db.conversations.find_one({"conversation_id": conversation_id}, {"_id": 0})
+    if not conv or current["user_id"] not in conv.get("participants", []):
+        raise HTTPException(404, "Conversation not found")
+    if not conv.get("is_group"):
+        raise HTTPException(400, "Not a group conversation")
+    is_self = user_id == current["user_id"]
+    if not is_self and conv.get("admin_id") != current["user_id"]:
+        raise HTTPException(403, "Only the group creator can remove other members")
+    if user_id not in conv.get("participants", []):
+        raise HTTPException(404, "Member not in this group")
+    updated = await remove_group_member(conv, target_user_id=user_id, actor_id=current["user_id"])
+    if updated is None:
+        return {"ok": True, "left": True, "conversation_id": conversation_id}
+    me = current["user_id"]
+    peers_list = await db.users.find(
+        {"user_id": {"$in": updated["participants"]}},
+        PEER_ROSTER_FIELDS,
+    ).to_list(100)
+    peers_by_id = {p["user_id"]: p for p in peers_list}
+    members = [project_user_for_peer(peers_by_id.get(p)) for p in updated["participants"] if p != me]
+    return sanitize_conversation_for_api({**updated, "members": [m for m in members if m]}, me)
 
 
 @router.delete("/{conversation_id}")

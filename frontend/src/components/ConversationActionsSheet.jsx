@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Bell, BellSlash, Prohibit, Trash, SignOut } from '@phosphor-icons/react';
+import { X, Bell, BellSlash, Prohibit, Trash, SignOut, UsersThree } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 
 /**
@@ -13,6 +13,7 @@ export default function ConversationActionsSheet({
   onMute,
   onBlock,
   onDelete,
+  onManageGroup,
 }) {
   const { t } = useLocale();
   const sheetRef = useRef(null);
@@ -76,6 +77,17 @@ export default function ConversationActionsSheet({
                 {contact.blocked ? t('unblock') : t('block')}
               </button>
             </>
+          )}
+          {isGroup && (
+            <button
+              type="button"
+              data-testid="conv-action-manage-group"
+              onClick={() => run(() => onManageGroup?.(conversation))}
+              className="w-full text-left px-3 py-2.5 rounded-md hover:bg-[#1A1A1A] flex items-center gap-3 text-sm"
+            >
+              <UsersThree size={18} className="text-[#00E5FF]" />
+              {t('groupManageTitle')}
+            </button>
           )}
           <button
             type="button"

@@ -17,6 +17,8 @@ import OnboardingCoach, { hasCompletedOnboarding } from '../components/Onboardin
 import Avatar from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CreateGroupModal from '../components/CreateGroupModal';
+import GroupManageModal from '../components/GroupManageModal';
+import { ConversationListSkeleton, MessagesSkeleton } from '../components/ChatSkeleton';
 import ConversationActionsSheet, { ConversationListRow } from '../components/ConversationActionsSheet';
 import ProfileContactSheet from '../components/ProfileContactSheet';
 import { useLocale } from '../context/LocaleContext';
@@ -112,6 +114,9 @@ export default function ChatHome() {
   const userNearBottomRef = useRef(true);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [groupManageOpen, setGroupManageOpen] = useState(false);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [storyGroup, setStoryGroup] = useState(null);
   const [groupCallState, setGroupCallState] = useState(null); // {mode, direction, members, signal}
   const [convActionsTarget, setConvActionsTarget] = useState(null);
@@ -272,6 +277,8 @@ export default function ChatHome() {
       setConversations(data);
     } catch {
       /* ignore */
+    } finally {
+      setConversationsLoading(false);
     }
   }, []);
   const goToConversation = useCallback((id) => {
@@ -564,7 +571,11 @@ export default function ChatHome() {
   const deleteConversation = async (conv) => {
     if (!conv?.conversation_id) return;
     try {
-      await api.delete(`/conversations/${conv.conversation_id}`);
+      if (conv.is_group) {
+        await api.delete(`/conversations/${conv.conversation_id}/members/${user?.user_id}`);
+      } else {
+        await api.delete(`/conversations/${conv.conversation_id}`);
+      }
       await loadConversations();
       if (activeId === conv.conversation_id) leaveChat();
       toast.success(conv.is_group ? t('leftGroup') : t('chatDeleted'));
@@ -572,6 +583,10 @@ export default function ChatHome() {
       toast.error(e?.response?.data?.detail || t('couldNotDeleteChat'));
     }
   };
+
+  const refreshActiveGroup = useCallback(async () => {
+    await loadConversations();
+  }, [loadConversations]);
 
   const confirmRemoveContact = async () => {
     const uid = confirmRemoveUid;
@@ -675,8 +690,11 @@ export default function ChatHome() {
               return [...others, { user_id: data.user_id, last_read_message_id: data.last_read_message_id }];
             });
           }
-        } else if (data.type === 'conversation-created') {
+        } else if (data.type === 'conversation-created' || data.type === 'conversation-updated') {
           loadConversations();
+        } else if (data.type === 'conversation-deleted') {
+          loadConversations();
+          if (data.data?.conversation_id === activeId) leaveChat();
         } else if (data.type === 'status-new') {
           window.dispatchEvent(new Event('ssc-status-new'));
         } else if (isContactRealtimeEvent(data)) {
@@ -718,7 +736,8 @@ export default function ChatHome() {
 
   // ─── Load messages on active change ───
   useEffect(() => {
-    if (!activeId) { setMessages([]); setReads([]); return; }
+    if (!activeId) { setMessages([]); setReads([]); setMessagesLoading(false); return; }
+    setMessagesLoading(true);
     (async () => {
       try {
         const { data } = await api.get(`/conversations/${activeId}/messages`);
@@ -744,6 +763,7 @@ export default function ChatHome() {
         // mark as read
         try { await api.post('/messages/read', { conversation_id: activeId }); } catch {}
       } catch {}
+      finally { setMessagesLoading(false); }
     })();
   }, [activeId, user?.user_id, peer?.user_id]);
 
@@ -1220,13 +1240,14 @@ export default function ChatHome() {
         <StoriesBar me={user} privateKey={privateKey} onView={(g) => setStoryGroup(g)} />
 
         <div className="flex-1 overflow-y-auto">
-          {conversations.length === 0 && (
+          {conversationsLoading && <ConversationListSkeleton />}
+          {!conversationsLoading && conversations.length === 0 && (
             <div className="p-6 text-center text-xs font-mono text-[#A1A1AA] tracking-wider">
               {t('noConversations')}
               <p className="mt-2 normal-case font-sans tracking-normal">{t('noConversationsHint')}</p>
             </div>
           )}
-          {sidebarConversations.map((c) => {
+          {!conversationsLoading && sidebarConversations.map((c) => {
             const peerMuted = !c.is_group && isPeerMuted(c.peer?.user_id, myContacts);
             return (
               <ConversationListRow
@@ -1313,8 +1334,13 @@ export default function ChatHome() {
                     </div>
                   </button>
                 ) : (
-                  <>
-                    <Avatar user={isGroup ? null : peer} isGroup={isGroup} size="sm" showOnline={!isGroup} />
+                  <button
+                    type="button"
+                    onClick={() => setGroupManageOpen(true)}
+                    className="flex items-center gap-2 md:gap-3 min-w-0 text-left hover:opacity-90 transition"
+                    data-testid="chat-group-manage-tap"
+                  >
+                    <Avatar user={null} isGroup size="sm" />
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate" data-testid="chat-peer-username">
                         {headerTitle}
@@ -1330,7 +1356,7 @@ export default function ChatHome() {
                         </span>
                       </div>
                     </div>
-                  </>
+                  </button>
                 )}
               </div>
               <div className="flex items-center gap-1 md:gap-2 shrink-0">
@@ -1451,12 +1477,13 @@ export default function ChatHome() {
               <div className="hidden md:block px-3 py-1">
                 <input value={messageFilter} onChange={(e) => setMessageFilter(e.target.value)} placeholder={t('searchMessages')} className="w-full text-xs bg-transparent border-0 border-b border-[#27272A] pb-1" data-testid="message-filter" />
               </div>
-              {messages.length === 0 && (
+              {messagesLoading && <MessagesSkeleton />}
+              {!messagesLoading && messages.length === 0 && (
                 <div className="text-center text-xs font-mono text-[#A1A1AA] tracking-wider my-8">
                   {t('emptyChatHint')}
                 </div>
               )}
-              {filteredMessages.map((m) => (
+              {!messagesLoading && filteredMessages.map((m) => (
                 <Message
                   key={m.message_id}
                   msg={m}
@@ -1672,6 +1699,16 @@ export default function ChatHome() {
         onCreated={(c) => { loadConversations(); goToConversation(c.conversation_id); }}
       />
 
+      <GroupManageModal
+        open={groupManageOpen}
+        onClose={() => setGroupManageOpen(false)}
+        conversation={activeConv}
+        myUserId={user?.user_id}
+        contacts={myContacts}
+        onUpdated={refreshActiveGroup}
+        onLeave={() => { setGroupManageOpen(false); leaveChat(); loadConversations(); }}
+      />
+
       <ConversationActionsSheet
         open={!!convActionsTarget}
         conversation={convActionsTarget}
@@ -1682,6 +1719,10 @@ export default function ChatHome() {
         onMute={toggleMute}
         onBlock={toggleBlock}
         onDelete={deleteConversation}
+        onManageGroup={(conv) => {
+          goToConversation(conv.conversation_id);
+          setGroupManageOpen(true);
+        }}
       />
 
       <ProfileContactSheet

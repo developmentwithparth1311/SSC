@@ -191,7 +191,7 @@
 | Task | Scope | Status |
 |------|-------|--------|
 | **L.7** | Turnstile + API domain + TURN proof | [~] Turnstile + API domain done; TURN off-LAN pending P.6 |
-| **M** | In-app UX polish (profile, Settings, feel) | [~] in progress |
+| **M** | In-app UX polish (profile, Settings, feel) | [x] M.1–M.11 done (M.6 deferred v1.1) |
 | **N** | Landing, legal, downloads, trust | [~] in progress |
 | **O** | Crypto hardening (RSA retire, group signaling, keystore) | [ ] after M/N |
 | **J** QA matrix | smashmaxxx ↔ dots — **paused** until M/O ready | [ ] |
@@ -369,8 +369,8 @@
 
 | ID | Subtask | Target | Status |
 |----|---------|--------|--------|
-| I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [~] `www.supersecurechat.com` live; API subdomain pending |
-| I.2 | **Turnstile** captcha on production register/login | ~28 Jun 2026 | [ ] |
+| I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [x] `www` + `api.supersecurechat.com` live |
+| I.2 | **Turnstile** captcha on production register/login | ~28 Jun 2026 | [x] P.1–P.2 + v1.0.8 clients |
 | I.3 | **TURN** verification off-LAN (cellular ↔ Wi‑Fi calls) | Founder manual | [ ] |
 | I.4 | **Retention proof** — 24h delete on smashmaxxx ↔ dots thread | In progress (backend proof pass; founder thread proof pending) | [~] |
 | I.5 | Rebuild **APK + desktop** after TASK batches; bump version | Post-fix | [x] |
@@ -449,10 +449,10 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | M.5 | **Change password** (password accounts only) | `auth` router + Settings | [x] |
 | M.6 | **User retention picker** (1h / 6h / 24h / 7d) | backend policy + Settings | [ ] deferred v1.1 |
 | M.7 | **Delete account** flow | backend + Settings + confirm | [x] `POST /auth/delete-account` |
-| M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [~] Message decrypt retry + i18n |
-| M.9 | **Stories UX pass** — views, delete, navigation | `Stories.jsx` | [ ] |
-| M.10 | **Calls visual polish** — failed/reconnect copy | `CallModal.jsx` | [ ] |
-| M.11 | **Group admin** — rename, add/remove members | `ChatHome.jsx`, API | [ ] |
+| M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx`, `ChatSkeleton.jsx` | [x] |
+| M.9 | **Stories UX pass** — views, delete, navigation | `Stories.jsx` | [x] i18n + Escape + viewer polish |
+| M.10 | **Calls visual polish** — failed/reconnect copy | `CallModal.jsx` | [x] status labels + end reasons |
+| M.11 | **Group admin** — rename, add/remove members | `GroupManageModal.jsx`, API | [x] local rename + member API |
 | M.12 | **Last-seen privacy toggle** | Settings + API | [ ] v2 |
 
 ---
@@ -516,7 +516,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | Server exposure | **B** | ciphertext messages; group call SDP gap |
 | Abuse resistance | **B** | rate limits ✅; Turnstile ✅ (register/login) |
 | Client secret storage | **B-** | AES device wrap in localStorage |
-| Product UX | **C+** → target **B** after TASK M |
+| Product UX | **B-** | TASK M complete; founder QA (J) still pending |
 | Public launch readiness | **D+** → target **B-** after M+N+O+P |
 
 **Marketing rule (unchanged):** Signal-grade E2E on **installed apps** — not browser tab; not “audited like Signal” until O.5.
@@ -669,6 +669,9 @@ yarn test:ci
 | 2026-06-26 | **TASK M.8** — message decrypt retry, slow-timeout hint, i18n error copy (`Message.jsx`) |
 | 2026-06-26 | **TASK M.5** — `POST /auth/change-password` + Settings form for password accounts |
 | 2026-06-26 | **TASK P deploy** — API `ssc-api-00017-whm` redeploy; Firebase Hosting (Privacy/Terms live); CORS for supersecurechat.com; `scripts/verify_task_p.ps1` + `TASK_P_FOUNDER_STEPS.txt` |
+| 2026-06-26 | **TASK P.1–P.5 complete** — Turnstile live; `api.supersecurechat.com` SSL; Google OAuth redirect; v1.0.8 APK/desktop/hosting |
+| 2026-06-26 | **TASK M.7** — `POST /auth/delete-account` + Settings delete flow |
+| 2026-06-26 | **TASK M.8–M.11** — chat skeletons; Stories i18n; call status copy; `GroupManageModal` + group member API; leave-group no longer deletes conv for all |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
