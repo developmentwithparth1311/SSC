@@ -2,7 +2,7 @@
 WebRTC signaling policy — Engine 8.7 (G6).
 
 1:1 SDP/ICE relayed as opaque signal_v1 ciphertext when clients upgrade.
-Group calls remain legacy cleartext (Sender Keys deferred).
+Group calls use signal_v1 ciphertext when clients have sender keys; legacy cleartext fallback remains.
 Server rejects signal_v1 envelopes that still carry cleartext sdp/candidate.
 """
 from __future__ import annotations

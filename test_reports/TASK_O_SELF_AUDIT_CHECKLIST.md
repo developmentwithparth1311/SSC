@@ -1,6 +1,6 @@
 # TASK O — Structured self-audit checklist (O.5)
 
-**Date:** 2026-06-26 · **Build:** v1.0.8 · **Auditor:** founder + agent
+**Date:** 2026-06-27 · **Build:** v1.0.9 · **Auditor:** founder + agent
 
 Mark each item PASS / FAIL / N/A with evidence (screenshot, log, or test name).
 

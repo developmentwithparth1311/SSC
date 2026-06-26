@@ -20,7 +20,7 @@ import LandingScreenshots from '../components/LandingScreenshots';
 import MarketingPage from '../components/MarketingPage';
 import { isInstalledClient } from '../lib/platform';
 
-const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.8';
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.9';
 const DOWNLOAD_APK_URL = process.env.REACT_APP_DOWNLOAD_APK_URL || '';
 const DOWNLOAD_WIN_URL = process.env.REACT_APP_DOWNLOAD_WIN_URL || '';
 const DOWNLOAD_ANDROID_BETA_URL = process.env.REACT_APP_DOWNLOAD_ANDROID_BETA_URL || '';

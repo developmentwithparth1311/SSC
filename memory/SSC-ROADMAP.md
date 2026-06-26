@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-26 (email inbound ✅; J tomorrow all-day; O.1–O.6 confirmed; site gate until app flow ≥90%)
+**Updated:** 2026-06-27 (v1.0.9 TASK O clients; full audit; J tomorrow)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -20,8 +20,8 @@
 6. **Website** — construction gate stays on until founder + agent agree app flow **≥90%**; then `REACT_APP_SITE_UNDER_CONSTRUCTION=false`.
 4. **Release gate** — TASK J green + TASK N legal pages + Turnstile + API domain before public launch.
 
-**Current builds:** APK **v1.0.8** · Windows **`SSC-Setup-1.0.8.exe`** · API **`ssc-api-00019-4zf`**
-**Last deploy:** 26 Jun 2026 — OAuth on api.supersecurechat.com, delete-account, v1.0.8 clients
+**Current builds:** APK **v1.0.9** (build 10) · Windows **`SSC-Setup-1.0.9.exe`** · API **`ssc-api-00019-4zf`**
+**Last deploy:** 27 Jun 2026 — TASK O crypto hardening clients; construction gate; landing v3
 **Next task:** **P.6** TURN off-LAN proof · **TASK J** founder QA scheduled **27 Jun 2026**
 
 ---
@@ -681,6 +681,7 @@ yarn test:ci
 | 2026-06-26 | **Construction gate** — invite-only password (`REACT_APP_SITE_PREVIEW_PASSWORD`); 5-try lockout; `?access=` bookmark; flip `REACT_APP_SITE_UNDER_CONSTRUCTION=false` at launch |
 | 2026-06-26 | **Founder plan** — J all-day 27 Jun; O.1–O.6 after J; paid store items next week; site gate until app flow ≥90%; N.6 Gmail→contact@ inbound OK |
 | 2026-06-26 | **TASK O code** — RSA send blocked installed; group signaling encrypt; hardware device wrap; verify via profile sheet; self-audit checklist; Atlas hardening doc; Mongo MCP installed |
+| 2026-06-27 | **v1.0.9** — TASK O client rebuild (APK build 10 + Windows); PRODUCT_BLUEPRINT v2.2; housekeeping notes; full founder audit |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
