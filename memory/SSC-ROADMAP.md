@@ -467,7 +467,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | N.2 | **Terms of Use** page `/terms` | code | [x] |
 | N.3 | **Landing footer** — real version, legal links, contact email | `Landing.jsx` | [x] |
 | N.4 | **Download links** on landing (`REACT_APP_DOWNLOAD_*`) | founder sets URLs + redeploy hosting | [ ] |
-| N.5 | **Landing v2** — screenshots, copy, Super Secure Chat branding | design + `Landing.jsx` | [ ] |
+| N.5 | **Landing v2** — screenshots, copy, Super Secure Chat branding | design + `Landing.jsx` | [~] branding + i18n about; screenshots pending |
 | N.6 | **`hello@supersecurechat.com`** email routing | founder: Cloudflare Email Routing | [ ] |
 | N.7 | **Firebase App Distribution** link on landing | founder: upload APK + URL | [ ] |
 | N.8 | **Play Store** listing assets | founder + TASK I.6 | [ ] |

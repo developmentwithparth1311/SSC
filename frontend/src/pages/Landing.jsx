@@ -40,10 +40,19 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-md bg-[#00E5FF] flex items-center justify-center">
               <LockKey size={18} weight="bold" className="text-black" />
             </div>
-            <span className="font-mono text-sm tracking-[0.25em]">SSC</span>
+            <div>
+              <span className="font-mono text-sm tracking-[0.25em]">SSC</span>
+              <div className="text-[9px] font-mono text-[#71717A] tracking-wider hidden sm:block">supersecurechat.com</div>
+            </div>
           </div>
           <nav className="flex items-center gap-3">
             <LanguagePicker className="w-32 hidden sm:flex" />
+            {!installed && (
+              <>
+                <Link to="/privacy" className="hidden md:inline text-xs text-[#A1A1AA] hover:text-white">{t('landingNavPrivacy')}</Link>
+                <Link to="/terms" className="hidden md:inline text-xs text-[#A1A1AA] hover:text-white">{t('landingNavTerms')}</Link>
+              </>
+            )}
             {installed ? (
               <>
                 <Link to="/login" data-testid="landing-login-link" className="px-4 py-2 text-sm text-[#A1A1AA] hover:text-white transition">{t('landingLogin')}</Link>
@@ -170,28 +179,27 @@ export default function Landing() {
           ))}
         </div>
 
-        <section className="mt-16 rounded-md tac-border bg-[#121212] p-6 md:p-8 fade-up" style={{ animationDelay: '0.2s' }}>
+        <section className="mt-16 rounded-md tac-border bg-[#121212] p-6 md:p-8 fade-up" style={{ animationDelay: '0.2s' }} data-testid="landing-about-section">
           <div className="grid md:grid-cols-12 gap-8">
             <div className="md:col-span-7">
-              <p className="text-xs font-mono uppercase tracking-[0.2em] text-[#A1A1AA]">About the app</p>
-              <h2 className="mt-3 text-2xl md:text-3xl font-mono tracking-tight text-white">Private messaging built for speed, clarity, and control.</h2>
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-[#A1A1AA]">{t('landingAboutLabel')}</p>
+              <h2 className="mt-3 text-2xl md:text-3xl font-mono tracking-tight text-white">{t('landingAboutTitle')}</h2>
               <p className="mt-4 text-sm md:text-base text-[#A1A1AA] leading-relaxed">
-                SSC is an installed-chat experience focused on encrypted conversations, fast delivery, and automatic 24-hour recycle across messages,
-                files, and call traces. The goal is simple: keep everyday communication clean and useful without creating long-term data residue.
+                {t('landingAboutBody')}
               </p>
             </div>
             <div className="md:col-span-5 grid gap-3 text-sm">
               <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
-                <p className="font-medium text-[#F4F4F5]">No phone number required</p>
-                <p className="text-[#A1A1AA] mt-1">Account access is email/password or Google sign-in.</p>
+                <p className="font-medium text-[#F4F4F5]">{t('landingAboutNoPhoneTitle')}</p>
+                <p className="text-[#A1A1AA] mt-1">{t('landingAboutNoPhoneBody')}</p>
               </div>
               <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
                 <p className="font-medium text-[#F4F4F5]">{t('landingAboutEphemeralTitle')}</p>
                 <p className="text-[#A1A1AA] mt-1">{t('landingAboutEphemeralBody')}</p>
               </div>
               <div className="rounded-md border border-[#27272A] bg-[#0F0F10] px-4 py-3">
-                <p className="font-medium text-[#F4F4F5]">Cross-device installed clients</p>
-                <p className="text-[#A1A1AA] mt-1">Android and desktop flow, with browser-tab chat intentionally disabled.</p>
+                <p className="font-medium text-[#F4F4F5]">{t('landingAboutInstalledTitle')}</p>
+                <p className="text-[#A1A1AA] mt-1">{t('landingAboutInstalledBody')}</p>
               </div>
             </div>
           </div>
