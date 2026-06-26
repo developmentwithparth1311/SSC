@@ -448,7 +448,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | M.4 | **Settings: push enable** + help/support link | `SettingsModal.jsx` | [x] |
 | M.5 | **Change password** (password accounts only) | `auth` router + Settings | [x] |
 | M.6 | **User retention picker** (1h / 6h / 24h / 7d) | backend policy + Settings | [ ] deferred v1.1 |
-| M.7 | **Delete account** flow | backend + Settings + confirm | [ ] before public |
+| M.7 | **Delete account** flow | backend + Settings + confirm | [x] `POST /auth/delete-account` |
 | M.8 | **Loading / error states** — decrypt retry, skeletons | `Message.jsx`, `ChatHome.jsx` | [~] Message decrypt retry + i18n |
 | M.9 | **Stories UX pass** — views, delete, navigation | `Stories.jsx` | [ ] |
 | M.10 | **Calls visual polish** — failed/reconnect copy | `CallModal.jsx` | [ ] |
@@ -498,8 +498,8 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | P.1 | Create **Cloudflare Turnstile** site + secret keys | Cloudflare dashboard | L.7, I.2, bot abuse | [x] 26 Jun 2026 |
 | P.2 | Add keys to `backend/cloud_run.env` + `REACT_APP_TURNSTILE_SITEKEY` | redeploy API + rebuild clients | L.7 | [x] API **00018-gnx** + hosting rebuild |
 | P.3 | Map **`api.supersecurechat.com`** → Cloud Run | GCP console or `gcloud beta` + Porkbun DNS | L.7, I.1 | [x] SSL live; `/api/health` 200 |
-| P.4 | Update **Google OAuth** authorized domains + redirect URI | Google Cloud Console | OAuth on new API domain |
-| P.5 | Update **CORS_ORIGINS** + `REACT_APP_BACKEND_URL` | `cloud_run.env` + frontend env | clients | [~] CORS includes supersecurechat.com |
+| P.4 | Update **Google OAuth** authorized domains + redirect URI | Google Cloud Console | OAuth on new API domain | [x] 26 Jun 2026 |
+| P.5 | Update **CORS_ORIGINS** + `GOOGLE_REDIRECT_URI` + `REACT_APP_BACKEND_URL` | `cloud_run.env` + frontend env | clients | [x] api.supersecurechat.com |
 | P.6 | **TURN off-LAN call test** (cellular ↔ Wi‑Fi) | smashmaxxx ↔ dots | I.3, L.7 |
 | P.7 | **Cloudflare Email Routing** for `hello@` | Cloudflare | N.6 |
 | P.8 | **Windows code signing** cert (optional) | SSL.com / DigiCert | SmartScreen |

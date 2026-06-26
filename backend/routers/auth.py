@@ -21,8 +21,10 @@ from core.session_issue import create_session_token, issue_authenticated_session
 from core.token_revocation import revoke_token
 from core.ws_tickets import issue_ws_ticket
 from core.database import db
+from core.account_delete_service import execute_account_delete
 from core.models import (
     ChangePasswordIn,
+    DeleteAccountIn,
     FinishGoogleSetupIn,
     GoogleOAuthExchangeIn,
     GoogleSessionIn,
@@ -329,6 +331,42 @@ async def change_password(body: ChangePasswordIn, current=Depends(get_current_us
         }},
     )
     return {"ok": True}
+
+
+@router.post("/delete-account")
+async def delete_account(
+    body: DeleteAccountIn,
+    request: Request,
+    response: Response,
+    current=Depends(get_current_user),
+):
+    if not rate_limit_check(f"delete_acct:{current['user_id']}", max_hits=3, window_sec=3600):
+        raise HTTPException(429, "Too many delete attempts — try again later")
+    doc = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "User not found")
+    if (body.username_confirmation or "").strip() != doc.get("username"):
+        raise HTTPException(400, "Username confirmation does not match")
+    if doc.get("totp_enabled"):
+        if not body.totp_code:
+            raise HTTPException(401, "2FA code required", headers={"X-Requires-2FA": "1"})
+        code_ok = False
+        if body.totp_code.isdigit() and pyotp.TOTP(doc["totp_secret"]).verify(body.totp_code, valid_window=1):
+            code_ok = True
+        elif doc.get("totp_backup_hashes"):
+            for h in list(doc.get("totp_backup_hashes", [])):
+                if verify_password(body.totp_code, h):
+                    code_ok = True
+                    break
+        if not code_ok:
+            raise HTTPException(401, "Invalid 2FA code")
+    if doc.get("password_hash"):
+        if not body.password or not verify_password(body.password, doc["password_hash"]):
+            raise HTTPException(401, "Password required to delete this account")
+    session_token = resolve_request_session_token(request)
+    result = await execute_account_delete(current["user_id"], session_token=session_token)
+    clear_session_cookie(response)
+    return result
 
 
 @router.post("/2fa/setup")

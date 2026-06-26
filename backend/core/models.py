@@ -86,6 +86,12 @@ class ChangePasswordIn(BaseModel):
     pk_salt: str = Field(min_length=8, max_length=256)
 
 
+class DeleteAccountIn(BaseModel):
+    username_confirmation: str = Field(min_length=1, max_length=32)
+    password: Optional[str] = Field(default=None, max_length=128)
+    totp_code: Optional[str] = None
+
+
 class PushSubscribeIn(BaseModel):
     endpoint: str
     keys: Dict[str, str]

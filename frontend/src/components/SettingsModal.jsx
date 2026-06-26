@@ -49,7 +49,7 @@ const SUPPORT_EMAIL = 'hello@supersecurechat.com';
 const SITE_URL = 'https://www.supersecurechat.com';
 
 export default function SettingsModal({ open, onClose }) {
-  const { user, refreshUser, panicWipe } = useAuth();
+  const { user, refreshUser, panicWipe, logout } = useAuth();
   const { t, setLocale } = useLocale();
   const [language, setLanguage] = useState(user?.language || 'en');
   const [busy, setBusy] = useState(false);
@@ -63,6 +63,9 @@ export default function SettingsModal({ open, onClose }) {
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const avatarInputRef = useRef(null);
 
   const canChangePassword = user?.auth_provider === 'password';
@@ -114,6 +117,34 @@ export default function SettingsModal({ open, onClose }) {
       toast.error(t('settingsPushFailed'));
     } finally {
       setPushBusy(false);
+    }
+  };
+
+  const deleteAccount = async (e) => {
+    e.preventDefault();
+    if ((deleteConfirm || '').trim() !== (user?.username || '')) {
+      toast.error(t('settingsDeleteUsernameMismatch'));
+      return;
+    }
+    if (canChangePassword && !deletePassword) {
+      toast.error(t('settingsDeletePasswordRequired'));
+      return;
+    }
+    if (!window.confirm(t('settingsDeleteConfirmDialog'))) return;
+    setDeleteBusy(true);
+    try {
+      await api.post('/auth/delete-account', {
+        username_confirmation: deleteConfirm.trim(),
+        password: deletePassword || undefined,
+      });
+      toast.success(t('settingsDeleteSuccess'));
+      onClose();
+      await logout();
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      toast.error(detail || t('settingsDeleteFailed'));
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -367,6 +398,39 @@ export default function SettingsModal({ open, onClose }) {
                 <p className="text-[10px] text-[#71717A] leading-relaxed mb-3 normal-case">{t('settingsEmergencyHint')}</p>
                 <PanicButton onWipe={panicWipe} />
               </div>
+
+              <form onSubmit={deleteAccount} className="mt-5 pt-4 border-t border-[#3F1010]" data-testid="settings-delete-account-form">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-[#FF453A] mb-2">{t('settingsDeleteAccount')}</p>
+                <p className="text-[10px] text-[#71717A] leading-relaxed mb-3 normal-case">{t('settingsDeleteAccountHint')}</p>
+                <input
+                  type="text"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder={t('settingsDeleteUsernamePlaceholder', { username: user?.username || '' })}
+                  className="w-full px-3 py-2 text-sm bg-[#1A1A1A] border border-[#3F1010] rounded-md mb-2"
+                  autoComplete="off"
+                  data-testid="settings-delete-username"
+                />
+                {canChangePassword && (
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder={t('settingsDeletePasswordPlaceholder')}
+                    className="w-full px-3 py-2 text-sm bg-[#1A1A1A] border border-[#3F1010] rounded-md mb-2"
+                    autoComplete="current-password"
+                    data-testid="settings-delete-password"
+                  />
+                )}
+                <button
+                  type="submit"
+                  disabled={deleteBusy || deleteConfirm.trim() !== (user?.username || '') || (canChangePassword && !deletePassword)}
+                  className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#FF453A]/50 text-[#FF453A] rounded-md hover:bg-[#FF453A]/10 disabled:opacity-40"
+                  data-testid="settings-delete-submit"
+                >
+                  {deleteBusy ? t('processing') : t('settingsDeleteAccountSubmit')}
+                </button>
+              </form>
             </Section>
 
             <Section icon={UserCircle} title={t('settingsBlockedContacts')} testId="settings-blocked-section">
