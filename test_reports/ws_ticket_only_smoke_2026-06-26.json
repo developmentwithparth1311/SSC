@@ -1,0 +1,7 @@
+﻿{
+  "register_ok": true,
+  "ws_ticket_ok": true,
+  "ticket_connect_ok": true,
+  "token_query_rejected": true,
+  "passed": true
+}

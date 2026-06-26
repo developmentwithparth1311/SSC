@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.retention import TTL_INDEX_COLLECTIONS
 
@@ -41,6 +41,8 @@ class RetentionProofReport:
     checks: List[ProofCheck] = field(default_factory=list)
     expired_counts: Dict[str, int] = field(default_factory=dict)
     collection_counts: Dict[str, int] = field(default_factory=dict)
+    orphan_gridfs_count: int = 0
+    orphan_gridfs_sample: List[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -52,6 +54,8 @@ class RetentionProofReport:
             "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in self.checks],
             "expired_counts": self.expired_counts,
             "collection_counts": self.collection_counts,
+            "orphan_gridfs_count": self.orphan_gridfs_count,
+            "orphan_gridfs_sample": self.orphan_gridfs_sample,
         }
 
 
@@ -112,7 +116,42 @@ async def count_expired_documents(db, at: Optional[datetime] = None) -> Dict[str
     return counts
 
 
-async def run_retention_proof(db, *, fail_on_expired: bool = False) -> RetentionProofReport:
+async def count_orphan_gridfs_blobs(
+    db,
+    *,
+    sample_limit: int = 20,
+) -> Tuple[int, List[str]]:
+    """Count blobs in ssc_files bucket that no longer have a live file record."""
+    orphan_count = 0
+    sample: List[str] = []
+
+    cursor = db["ssc_files.files"].find({}, {"filename": 1})
+    async for blob in cursor:
+        filename = blob.get("filename")
+        if not filename:
+            continue
+        owner = await db.files.find_one(
+            {
+                "file_id": filename,
+                "is_deleted": {"$ne": True},
+            },
+            {"_id": 1},
+        )
+        if owner:
+            continue
+        orphan_count += 1
+        if len(sample) < sample_limit:
+            sample.append(filename)
+
+    return orphan_count, sample
+
+
+async def run_retention_proof(
+    db,
+    *,
+    fail_on_expired: bool = False,
+    include_orphan_gridfs: bool = True,
+) -> RetentionProofReport:
     report = RetentionProofReport()
     report.checks.extend(await check_ttl_indexes(db))
     report.checks.extend(await check_expires_at_coverage(db))
@@ -131,4 +170,20 @@ async def run_retention_proof(db, *, fail_on_expired: bool = False) -> Retention
             ),
         )
     )
+
+    if include_orphan_gridfs:
+        orphan_count, sample = await count_orphan_gridfs_blobs(db)
+        report.orphan_gridfs_count = orphan_count
+        report.orphan_gridfs_sample = sample
+        report.checks.append(
+            ProofCheck(
+                name="orphan_gridfs_blobs",
+                passed=orphan_count == 0,
+                detail=(
+                    "no orphaned GridFS blobs"
+                    if orphan_count == 0
+                    else f"{orphan_count} orphaned GridFS blob(s) without live file record"
+                ),
+            )
+        )
     return report

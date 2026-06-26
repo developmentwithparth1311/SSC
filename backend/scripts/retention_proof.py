@@ -72,6 +72,12 @@ async def _main(args: argparse.Namespace) -> int:
                 if count:
                     print(f"  {coll}: {count}")
         print("---")
+        print(f"Orphan GridFS blobs: {report.orphan_gridfs_count}")
+        if report.orphan_gridfs_sample:
+            print("Orphan GridFS sample:")
+            for fid in report.orphan_gridfs_sample:
+                print(f"  {fid}")
+        print("---")
         print("RETENTION PROOF PASSED" if report.passed else "RETENTION PROOF FAILED")
 
     return 0 if report.passed else 1

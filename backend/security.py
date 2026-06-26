@@ -7,6 +7,8 @@ import logging
 from collections import defaultdict, deque
 from typing import Dict, Any
 
+from core.security_observability import security_event
+
 logger = logging.getLogger("ssc")
 
 # Rate limiting (in-memory; per single worker) - moved from server.py
@@ -25,9 +27,16 @@ except Exception as e:
     _redis = None
     if _redis_url:
         from core.logging_policy import safe_exception_label
+        reason = safe_exception_label(e)
         logger.warning(
-            f"REDIS_URL set but connection failed: {safe_exception_label(e)} "
+            f"REDIS_URL set but connection failed: {reason} "
             "— falling back to in-memory rate limits"
+        )
+        security_event(
+            "redis_rate_limit_fallback",
+            severity="warning",
+            backend="memory",
+            reason=reason,
         )
 
 
@@ -43,7 +52,13 @@ def ping_redis() -> bool:
     except Exception:
         return False
 
-def rate_limit_check(key: str, max_hits: int, window_sec: int) -> bool:
+def rate_limit_check(
+    key: str,
+    max_hits: int,
+    window_sec: int,
+    *,
+    limiter: str = "generic",
+) -> bool:
     """Returns True if allowed, False if rate-limited.
     Uses Redis if REDIS_URL set, else in-memory.
     """
@@ -55,7 +70,11 @@ def rate_limit_check(key: str, max_hits: int, window_sec: int) -> bool:
         pipe.expire(rkey, window_sec)
         count, _ = pipe.execute()
         if int(count) > max_hits:
-            logger.warning(f"rate limit hit for key={key}")
+            logger.warning(
+                "rate-limit reject "
+                f"limiter={limiter} backend=redis key={key} "
+                f"hits={int(count)} max_hits={max_hits} window_sec={window_sec}"
+            )
             return False
         return True
     # in memory
@@ -64,7 +83,11 @@ def rate_limit_check(key: str, max_hits: int, window_sec: int) -> bool:
     while bucket and now - bucket[0] > window_sec:
         bucket.popleft()
     if len(bucket) >= max_hits:
-        logger.warning(f"rate limit hit for key={key}")
+        logger.warning(
+            "rate-limit reject "
+            f"limiter={limiter} backend=memory key={key} "
+            f"hits={len(bucket)} max_hits={max_hits} window_sec={window_sec}"
+        )
         return False
     bucket.append(now)
     return True

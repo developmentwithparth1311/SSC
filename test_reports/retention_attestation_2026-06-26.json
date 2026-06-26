@@ -1,0 +1,122 @@
+﻿{
+  "passed": true,
+  "checks": [
+    {
+      "name": "ttl_index:messages",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:files",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:calls",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:user_sessions",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:statuses",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:conversations",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:message_reads",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "ttl_index:friend_requests",
+      "passed": true,
+      "detail": "expires_at TTL index (expireAfterSeconds=0)"
+    },
+    {
+      "name": "expires_at_field:messages",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:files",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:calls",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:user_sessions",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:statuses",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:conversations",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:message_reads",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expires_at_field:friend_requests",
+      "passed": true,
+      "detail": "all rows have expires_at"
+    },
+    {
+      "name": "expired_documents",
+      "passed": true,
+      "detail": "no expired rows pending TTL purge"
+    },
+    {
+      "name": "orphan_gridfs_blobs",
+      "passed": true,
+      "detail": "no orphaned GridFS blobs"
+    }
+  ],
+  "expired_counts": {
+    "messages": 0,
+    "files": 0,
+    "calls": 0,
+    "user_sessions": 0,
+    "statuses": 0,
+    "conversations": 0,
+    "message_reads": 0,
+    "friend_requests": 0
+  },
+  "collection_counts": {
+    "contact_blocks": 0,
+    "contact_mutes": 0,
+    "contact_rosters": 0,
+    "contact_seals": 0,
+    "conversations": 0,
+    "files": 0,
+    "message_reads": 0,
+    "messages": 0,
+    "native_push_tokens": 0,
+    "push_subscriptions": 0,
+    "statuses": 0,
+    "user_sessions": 0,
+    "users": 0
+  },
+  "orphan_gridfs_count": 0,
+  "orphan_gridfs_sample": []
+}

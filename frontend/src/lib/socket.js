@@ -12,21 +12,12 @@ export class ChatSocket {
 
   async connect() {
     try {
-      let url = WS_URL;
-      try {
-        const { api } = await import('./api');
-        const { data } = await api.post('/auth/ws-ticket');
-        if (data?.ticket) {
-          url = `${WS_URL}?ticket=${encodeURIComponent(data.ticket)}`;
-        } else if (this.token) {
-          url = `${WS_URL}?token=${encodeURIComponent(this.token)}`;
-        } else {
-          return;
-        }
-      } catch {
-        if (!this.token) return;
-        url = `${WS_URL}?token=${encodeURIComponent(this.token)}`;
+      const { api } = await import('./api');
+      const { data } = await api.post('/auth/ws-ticket');
+      if (!data?.ticket) {
+        return;
       }
+      const url = `${WS_URL}?ticket=${encodeURIComponent(data.ticket)}`;
       this.ws = new WebSocket(url);
     } catch (e) {
       console.error('ws ctor', e);

@@ -1,0 +1,21 @@
+﻿.\venv\Scripts\python.exe : 2026-06-26 17:03:12,723 - ssc - INFO - Logging 
+initialized (SSC log hygiene active)
+At line:1 char:258
++ ... .1:6399/0'; .\venv\Scripts\python.exe -c "import server" 2>&1 | Out-F ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026-06-26 17:0...hygiene active) 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-06-26 17:03:14,919 - ssc - WARNING - REDIS_URL set but connection failed: 
+ConnectionError ù falling back to in-memory rate limits
+2026-06-26 17:03:14,919 - ssc - WARNING - security-event 
+event=redis_rate_limit_fallback backend=memory reason=ConnectionError
+2026-06-26 17:03:15,098 - ssc - WARNING - TURNSTILE_SECRET not set ù captcha 
+disabled (development mode)
+2026-06-26 17:03:15,099 - ssc - INFO - Server-side translation disabled 
+(default ù preserves E2E privacy)
+2026-06-26 17:03:15,099 - ssc - INFO - Third-party egress active: 
+google_oauth, fcm, web_push, turn_stun (set SSC_AIR_GAPPED_MODE=true to block)
+2026-06-26 17:03:15,099 - ssc - INFO - SSC starting ù using database: ssc-dev 
+(Mongo Atlas or local)

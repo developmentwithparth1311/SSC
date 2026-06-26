@@ -11,7 +11,10 @@ native_push_module.db = None
 
 try:
     import certifi
-    client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
+    if MONGO_URL.startswith("mongodb+srv://") or "tls=true" in MONGO_URL:
+        client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
+    else:
+        client = AsyncIOMotorClient(MONGO_URL)
 except Exception:
     client = AsyncIOMotorClient(MONGO_URL)
 

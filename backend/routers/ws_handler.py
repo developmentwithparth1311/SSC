@@ -4,7 +4,6 @@ import json
 
 from fastapi import Query, WebSocket, WebSocketDisconnect
 
-from core.auth import decode_jwt
 from core.ws_tickets import consume_ws_ticket
 from core.contact_helpers import are_contacts, has_shared_conv
 from core.database import db
@@ -20,13 +19,8 @@ def register_websocket(app):
     async def websocket_endpoint(
         ws: WebSocket,
         ticket: str = Query(""),
-        token: str = Query(""),
     ):
-        user_id = None
-        if ticket:
-            user_id = consume_ws_ticket(ticket)
-        elif token:
-            user_id = decode_jwt(token)
+        user_id = consume_ws_ticket(ticket) if ticket else None
         if not user_id:
             await ws.close(code=4401)
             return

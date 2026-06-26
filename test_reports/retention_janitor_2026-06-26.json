@@ -1,0 +1,8 @@
+﻿{
+  "scanned_expired_file_records": 0,
+  "marked_deleted_file_records": 0,
+  "deleted_gridfs_for_expired_records": 0,
+  "scanned_gridfs_blobs": 0,
+  "orphaned_gridfs_blobs_deleted": 0,
+  "errors": 0
+}

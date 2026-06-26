@@ -35,9 +35,22 @@ async def upload_file(
         ok, err, normalized_type = validate_upload(data, file.content_type)
     if not ok:
         raise HTTPException(400, err)
-    if not rate_limit_check(f"file:{current['user_id']}", max_hits=5, window_sec=60):
-        logger.warning(f"rate-limit file-upload user={current['user_id']}")
+    if not rate_limit_check(
+        f"file:burst:{current['user_id']}",
+        max_hits=4,
+        window_sec=60,
+        limiter="file_upload_burst",
+    ):
+        logger.warning(f"rate-limit file-upload burst user={current['user_id']}")
         raise HTTPException(429, "Too many file uploads recently")
+    if not rate_limit_check(
+        f"file:sustained:{current['user_id']}",
+        max_hits=12,
+        window_sec=300,
+        limiter="file_upload_sustained",
+    ):
+        logger.warning(f"rate-limit file-upload user={current['user_id']}")
+        raise HTTPException(429, "File upload rate limit reached")
     file_id = await save_file_gridfs(
         data,
         file.filename or "file.bin",

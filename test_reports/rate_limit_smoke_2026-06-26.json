@@ -1,0 +1,8 @@
+﻿{
+  "register_ok": true,
+  "mutual_contact_ok": true,
+  "friend_request_limit_ok": true,
+  "group_create_limit_ok": true,
+  "file_upload_limit_ok": true,
+  "passed": true
+}

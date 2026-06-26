@@ -38,9 +38,22 @@ router = APIRouter()
 
 @router.post("/request")
 async def send_friend_request(body: SendFriendRequestIn, current=Depends(get_current_user)):
-    if not rate_limit_check(f"friendreq:{current['user_id']}", max_hits=5, window_sec=300):
-        logger.warning(f"rate-limit friend-request user={current['user_id']}")
+    if not rate_limit_check(
+        f"friendreq:burst:{current['user_id']}",
+        max_hits=5,
+        window_sec=300,
+        limiter="friend_request_burst",
+    ):
+        logger.warning(f"rate-limit friend-request burst user={current['user_id']}")
         raise HTTPException(429, "Too many friend requests recently")
+    if not rate_limit_check(
+        f"friendreq:daily:{current['user_id']}",
+        max_hits=40,
+        window_sec=86400,
+        limiter="friend_request_daily",
+    ):
+        logger.warning(f"rate-limit friend-request user={current['user_id']}")
+        raise HTTPException(429, "Friend request limit reached for today")
 
     target = await db.users.find_one({"username": body.username}, {"_id": 0, "user_id": 1, "username": 1})
     if not target:

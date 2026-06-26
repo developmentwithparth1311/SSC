@@ -27,7 +27,12 @@ router = APIRouter()
 
 @router.post("")
 async def create_conversation(body: CreateConversationIn, current=Depends(get_current_user)):
-    if not rate_limit_check(f"newconv:{current['user_id']}", max_hits=10, window_sec=300):
+    if not rate_limit_check(
+        f"newconv:{current['user_id']}",
+        max_hits=12,
+        window_sec=300,
+        limiter="conversation_create",
+    ):
         logger.warning(f"rate-limit new-convo user={current['user_id']}")
         raise HTTPException(429, "Too many new conversations recently")
 
@@ -37,6 +42,14 @@ async def create_conversation(body: CreateConversationIn, current=Depends(get_cu
             raise HTTPException(403, "You must be mutual contacts to start a 1:1 conversation")
 
     if body.is_group or (body.peer_usernames and len(body.peer_usernames) > 1):
+        if not rate_limit_check(
+            f"groupconv:{current['user_id']}",
+            max_hits=4,
+            window_sec=600,
+            limiter="group_create",
+        ):
+            logger.warning(f"rate-limit group-create user={current['user_id']}")
+            raise HTTPException(429, "Too many new groups recently")
         usernames = body.peer_usernames or []
         if not usernames:
             raise HTTPException(400, "Group requires peer_usernames")

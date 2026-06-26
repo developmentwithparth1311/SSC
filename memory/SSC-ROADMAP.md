@@ -1,6 +1,6 @@
 # SSC Roadmap — single source of truth
 
-**Updated:** 2026-06-26 (production retention proof + auth smoke verified)
+**Updated:** 2026-06-26 (TASK L.6 complete; TASK L.7 started)
 **Repo:** `C:\Users\smash\SSC-main`
 **Rule:** After every engine step, feature, or deploy — update **this file only**. Do not maintain parallel roadmaps.
 
@@ -12,13 +12,13 @@
 ## How to use this doc
 
 1. **Done** — Engines 1–5, 8–10, 9 + TASK A–F code + **v1.0.5 rebuild** (see §Foundation, §Release v1.0.5).
-2. **Next** — **Founder QA matrix (TASK J)** on smashmaxxx ↔ dots with v1.0.5 builds.
-3. **Then** — TASK H (UX polish) · TASK I (domain, Turnstile, TURN) when funded.
+2. **Next** — **TASK L** hardening execution queue (one by one, no skips).
+3. **Then** — **Founder QA matrix (TASK J)** on smashmaxxx ↔ dots with latest builds.
 4. **Release gate** — TASK J green before Firebase testers beyond founder.
 
 **Current builds:** APK **v1.0.7** · Windows **`SSC-Setup-1.0.7.exe`** · API **`ssc-api-00016-mgl`**
 **Last deploy:** 26 Jun 2026 — Cloud Run redeploy after TASK H backend auth updates
-**Next task:** TASK J — founder QA matrix (all A–F items on real devices)
+**Next task:** TASK L.7 — infra hardening follow-through
 
 ---
 
@@ -408,6 +408,22 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 
 ---
 
+### TASK L — Hardening execution queue (must run 1 by 1, fully)
+
+**Execution contract:** No skipping, no parallel shortcuts, no status inflation. Mark `[x]` only when code + verification evidence are complete and logged.
+
+| ID | Subtask | Evidence required | Status |
+|----|---------|-------------------|--------|
+| L.1 | Server retention janitor: purge orphaned file records + GridFS blobs after expiry window | code diff + report in `test_reports/` + changelog note | [x] |
+| L.2 | Retention attestation report/endpoint (TTL indexes, expires_at coverage, expired pending, orphan blobs) | endpoint/script output + roadmap entry | [x] |
+| L.3 | WebSocket hardening: remove JWT query fallback, enforce short-lived ticket-only handshake | code diff + WS auth smoke | [x] |
+| L.4 | Abuse defenses pass: stricter rate limits for friend requests, group create, file upload bursts; add clear 429 telemetry | code diff + config notes + smoke evidence | [x] |
+| L.5 | Security observability: anomaly logging/alerts for retention failures, Redis fallback, and auth abuse spikes | structured log events + documented runbook | [x] |
+| L.6 | Deploy gate hardening: fail deploy when retention proof regresses or required security env is weak | CI/script gate proof + deploy script update | [x] |
+| L.7 | Infra hardening follow-through: Turnstile production enable + TURN off-LAN verification + custom domain rollout | deploy evidence + QA evidence + roadmap update | [~] blocked: pending Turnstile keys + domain DNS + founder device off-LAN call proof |
+
+---
+
 ## Recommended start order (pick one — founder decides)
 
 | Order | Rationale |
@@ -530,6 +546,13 @@ yarn test:ci
 | 2026-06-26 | **TASK I.7 complete** — Cloud Run redeployed to revision `ssc-api-00016-mgl` (`https://ssc-api-4jp3wuccwa-ew.a.run.app`) |
 | 2026-06-26 | **TASK I.4 progress** — production retention proof PASS (TTL indexes + expires_at coverage + expired rows=0) saved to `test_reports/retention_proof_2026-06-26.json`; founder 24h thread proof still pending |
 | 2026-06-26 | **TASK J auth smoke** — production `/api/auth/login` returns `401` + `x-auth-provider: google` with friendly Google-only guidance |
+| 2026-06-26 | **TASK L.1 complete** — server retention janitor added (`core/retention_janitor.py`, startup wiring in `lifespan.py`, one-shot runner `scripts/retention_janitor.py`); evidence saved to `test_reports/retention_janitor_2026-06-26.json` |
+| 2026-06-26 | **TASK L.2 complete** — retention attestation expanded with orphan GridFS checks (`core/retention_proof.py`), authenticated endpoint added at `/api/retention/attestation`, evidence saved to `test_reports/retention_attestation_2026-06-26.json` |
+| 2026-06-26 | **TASK L.3 complete** — WebSocket now accepts ticket-only auth (`/api/ws?ticket=...`), JWT query fallback removed in backend + frontend socket client; smoke evidence saved to `test_reports/ws_ticket_only_smoke_2026-06-26.json` |
+| 2026-06-26 | **TASK L.4 complete** — abuse defenses tightened (friend-request burst/daily, group-create, file-upload burst/sustained) with structured `rate-limit reject` telemetry; smoke evidence saved to `test_reports/rate_limit_smoke_2026-06-26.json` |
+| 2026-06-26 | **TASK L.5 complete** — security observability hooks added (`core/security_observability.py`) for Redis fallback + retention janitor anomalies, with operational runbook `memory/SECURITY_OBSERVABILITY_RUNBOOK.md`; smoke evidence saved to `test_reports/security_observability_smoke_2026-06-26.log` |
+| 2026-06-26 | **TASK L.6 complete** — deploy gate hardened in `scripts/prepare_cloud_run_deploy.py` (strict env validation + mandatory retention proof gate); evidence saved to `test_reports/deploy_gate_hardening_2026-06-26.md` |
+| 2026-06-26 | **TASK L.7 in progress (blocked)** — production confirms Turnstile disabled and Cloud Run default domain still active; TURN creds present but off-LAN device proof pending. Blockers/evidence logged in `test_reports/infra_hardening_l7_status_2026-06-26.md` |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |
 | 2026-06-24 | **TASK F complete** — block/mute/groups; frontend 67 tests |
