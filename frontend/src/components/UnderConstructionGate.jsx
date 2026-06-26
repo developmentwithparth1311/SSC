@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { HardHat, LockKey, TrafficCone, EnvelopeSimple, Hourglass } from '@phosphor-icons/react';
+import { HardHat, LockKey, TrafficCone, EnvelopeSimple, Key } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
 import LanguagePicker from './LanguagePicker';
 import MarketingPage from './MarketingPage';
+import {
+  isSitePreviewAccessConfigured,
+  isSitePreviewLocked,
+  verifySitePreviewPassword,
+} from '../lib/siteGate';
 
 const CONTACT_EMAIL = 'contact@supersecurechat.com';
 
@@ -37,7 +42,12 @@ function ProgressBar({ label, hint }) {
 
 export default function UnderConstructionGate({ onBypass }) {
   const { t } = useLocale();
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(false);
+  const [error, setError] = useState('');
+  const [locked, setLocked] = useState(() => isSitePreviewLocked());
+  const accessEnabled = isSitePreviewAccessConfigured();
 
   useEffect(() => {
     const meta = document.querySelector('meta[name="robots"]');
@@ -57,6 +67,23 @@ export default function UnderConstructionGate({ onBypass }) {
     t('constructionBullet2'),
     t('constructionBullet3'),
   ];
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+    if (isSitePreviewLocked()) {
+      setLocked(true);
+      setError(t('constructionPasswordLocked'));
+      return;
+    }
+    if (!verifySitePreviewPassword(password)) {
+      setLocked(isSitePreviewLocked());
+      setPassword('');
+      setError(t('constructionPasswordWrong'));
+      return;
+    }
+    onBypass?.({ persist: remember });
+  };
 
   return (
     <MarketingPage gate={false} className="bg-[#0A0A0A] text-[#F0F0F0] relative overflow-hidden">
@@ -128,42 +155,82 @@ export default function UnderConstructionGate({ onBypass }) {
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-[#27272A]/80 text-center">
-            {!confirmOpen ? (
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(true)}
-                className="text-xs text-[#52525B] hover:text-[#A1A1AA] transition underline-offset-4 hover:underline"
-                data-testid="construction-bypass-trigger"
-              >
-                {t('constructionBypassLink')}
-              </button>
-            ) : (
-              <div className="space-y-4 fade-up" data-testid="construction-bypass-confirm">
-                <div className="flex items-center justify-center gap-2 text-sm text-[#A1A1AA]">
-                  <Hourglass size={16} className="text-[#FFD600]" />
-                  {t('constructionBypassWarning')}
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {accessEnabled ? (
+            <div className="mt-8 pt-6 border-t border-[#27272A]/80">
+              {!accessOpen ? (
+                <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => onBypass?.()}
-                    className="btn-primary"
-                    data-testid="construction-bypass-confirm-btn"
+                    onClick={() => setAccessOpen(true)}
+                    className="text-xs text-[#52525B] hover:text-[#A1A1AA] transition underline-offset-4 hover:underline"
+                    data-testid="construction-access-trigger"
                   >
-                    {t('constructionBypassConfirm')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmOpen(false)}
-                    className="btn-secondary"
-                  >
-                    {t('constructionBypassDismiss')}
+                    {t('constructionAccessLink')}
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-4 fade-up"
+                  data-testid="construction-access-form"
+                >
+                  <div className="flex items-center justify-center gap-2 text-sm text-[#A1A1AA]">
+                    <Key size={16} className="text-[#FFD600]" />
+                    {t('constructionAccessHint')}
+                  </div>
+                  <label className="block text-left">
+                    <span className="text-xs text-[#71717A]">{t('constructionPasswordLabel')}</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t('constructionPasswordPlaceholder')}
+                      autoComplete="off"
+                      disabled={locked}
+                      className="mt-2 w-full px-4 py-3 text-base"
+                      data-testid="construction-password-input"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-[#71717A] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      disabled={locked}
+                      className="rounded border-[#3F3F46]"
+                    />
+                    {t('constructionRememberDevice')}
+                  </label>
+                  {error ? (
+                    <p className="text-sm text-[#FF6B6B] text-center" data-testid="construction-password-error">
+                      {error}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="submit"
+                      className="btn-primary w-full sm:w-auto"
+                      disabled={locked || !password.trim()}
+                      data-testid="construction-password-submit"
+                    >
+                      {t('constructionPasswordSubmit')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccessOpen(false);
+                        setPassword('');
+                        setError('');
+                      }}
+                      className="btn-secondary w-full sm:w-auto"
+                    >
+                      {t('constructionAccessDismiss')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : null}
         </div>
       </main>
 

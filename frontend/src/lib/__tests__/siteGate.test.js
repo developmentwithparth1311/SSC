@@ -2,7 +2,9 @@ import {
   isSiteUnderConstruction,
   hasSiteAccessBypass,
   setSiteAccessBypass,
+  verifySitePreviewPassword,
   tryUrlPreviewBypass,
+  isSitePreviewLocked,
 } from '../siteGate';
 
 describe('siteGate', () => {
@@ -11,6 +13,8 @@ describe('siteGate', () => {
     window.localStorage.clear();
     delete window.location;
     window.location = new URL('https://www.supersecurechat.com/');
+    process.env.REACT_APP_SITE_PREVIEW_PASSWORD = 'invite-only-code';
+    delete process.env.REACT_APP_SITE_PREVIEW_KEY;
   });
 
   it('defaults to under construction in production when env unset', () => {
@@ -27,9 +31,19 @@ describe('siteGate', () => {
     expect(hasSiteAccessBypass()).toBe(true);
   });
 
-  it('accepts preview query param when key matches', () => {
-    process.env.REACT_APP_SITE_PREVIEW_KEY = 'ssc-preview';
-    window.location = new URL('https://www.supersecurechat.com/?preview=ssc-preview');
+  it('rejects wrong password and accepts correct password', () => {
+    expect(verifySitePreviewPassword('wrong')).toBe(false);
+    expect(verifySitePreviewPassword('invite-only-code')).toBe(true);
+  });
+
+  it('locks after repeated failures', () => {
+    for (let i = 0; i < 5; i += 1) verifySitePreviewPassword('wrong');
+    expect(isSitePreviewLocked()).toBe(true);
+    expect(verifySitePreviewPassword('invite-only-code')).toBe(false);
+  });
+
+  it('accepts bookmark access param when password matches', () => {
+    window.location = new URL('https://www.supersecurechat.com/?access=invite-only-code');
     expect(tryUrlPreviewBypass()).toBe(true);
     expect(hasSiteAccessBypass()).toBe(true);
   });

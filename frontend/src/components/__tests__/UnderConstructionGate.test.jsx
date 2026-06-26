@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import UnderConstructionGate from '../UnderConstructionGate';
 import { LocaleProvider } from '../../context/LocaleContext';
 import { t as translate } from '../../lib/i18n';
+import * as siteGate from '../../lib/siteGate';
 
 jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: null }),
@@ -14,6 +15,15 @@ jest.mock('../LanguagePicker', () => function LanguagePicker() {
 });
 
 describe('UnderConstructionGate', () => {
+  beforeEach(() => {
+    process.env.REACT_APP_SITE_PREVIEW_PASSWORD = 'test-invite-code';
+    jest.spyOn(siteGate, 'verifySitePreviewPassword');
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('renders construction message and contact email', () => {
     render(
       <MemoryRouter>
@@ -28,10 +38,12 @@ describe('UnderConstructionGate', () => {
       'href',
       'mailto:contact@supersecurechat.com',
     );
+    expect(screen.getByTestId('construction-access-trigger')).toBeInTheDocument();
   });
 
-  it('requires confirmation before bypass', () => {
+  it('requires correct password before bypass', () => {
     const onBypass = jest.fn();
+    siteGate.verifySitePreviewPassword.mockReturnValue(false);
     render(
       <MemoryRouter>
         <LocaleProvider>
@@ -39,10 +51,15 @@ describe('UnderConstructionGate', () => {
         </LocaleProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByTestId('construction-bypass-trigger'));
-    expect(screen.getByTestId('construction-bypass-confirm')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('construction-access-trigger'));
+    fireEvent.change(screen.getByTestId('construction-password-input'), { target: { value: 'nope' } });
+    fireEvent.click(screen.getByTestId('construction-password-submit'));
     expect(onBypass).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('construction-bypass-confirm-btn'));
-    expect(onBypass).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('construction-password-error')).toBeInTheDocument();
+
+    siteGate.verifySitePreviewPassword.mockReturnValue(true);
+    fireEvent.change(screen.getByTestId('construction-password-input'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByTestId('construction-password-submit'));
+    expect(onBypass).toHaveBeenCalledWith({ persist: false });
   });
 });

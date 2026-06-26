@@ -26,8 +26,8 @@ export default function MarketingPage({ children, className = '', gate = true })
   if (showGate) {
     return (
       <UnderConstructionGate
-        onBypass={() => {
-          setSiteAccessBypass({ persist: false });
+        onBypass={({ persist = false } = {}) => {
+          setSiteAccessBypass({ persist });
           setBypass(true);
         }}
       />
