@@ -20,7 +20,7 @@
 6. **Website** — construction gate stays on until founder + agent agree app flow **≥90%**; then `REACT_APP_SITE_UNDER_CONSTRUCTION=false`.
 4. **Release gate** — TASK J green + TASK N legal pages + Turnstile + API domain before public launch.
 
-**Current builds:** APK **v1.0.9** (build 10) · Windows **`SSC-Setup-1.0.9.exe`** · API **`ssc-api-00019-4zf`**
+**Current builds:** APK **v1.0.9** (build 10) · Windows **`SSC-Setup-1.0.9.exe`** · API **`ssc-api-00022-jzs`**
 **Last deploy:** 27 Jun 2026 — TASK O crypto hardening clients; construction gate; landing v3
 **Next task:** **P.6** TURN off-LAN proof · **TASK J** founder QA scheduled **27 Jun 2026**
 
@@ -30,7 +30,7 @@
 
 | Service | URL / status | Notes |
 |---------|----------------|-------|
-| **Production API** | `https://api.supersecurechat.com` | Cloud Run **`ssc-api-00019-4zf`** · `env=production` · mongo ✅ · redis ✅ |
+| **Production API** | `https://api.supersecurechat.com` | Cloud Run **`ssc-api-00022-jzs`** · `env=production` · mongo ✅ · redis ✅ |
 | **Firebase project** | `super-chat-b0992` | App Distribution, FCM push, Hosting (`super-chat-b0992.web.app`) |
 | **MongoDB** | Atlas `ssc` cluster | Network: allow Cloud Run (0.0.0.0/0) |
 | **Redis** | Upstash (production) | Required for `ENV=production` |
@@ -683,6 +683,7 @@ yarn test:ci
 | 2026-06-26 | **TASK O code** — RSA send blocked installed; group signaling encrypt; hardware device wrap; verify via profile sheet; self-audit checklist; Atlas hardening doc; Mongo MCP installed |
 | 2026-06-27 | **Gap fix** — GridFS orphans 0 (prod+dev); O.6 GCP NAT **34.140.240.41** + `ssc-vpc-connector` + Cloud Run `ssc-api-00021-6k6`; evidence `test_reports/gap_fix_gridfs_o6_2026-06-27.md` |
 | 2026-06-27 | **O.6 closed** — Atlas allowlist: `34.140.240.41/32` + `86.166.40.195/32` only; `0.0.0.0/0` removed; `/api/health` mongo+redis ok |
+| 2026-06-27 | **API redeploy** — `ssc-api-00022-jzs` (janitor loop fix + latest `main`); health ok post Atlas lockdown |
 | 2026-06-27 | **v1.0.9** — TASK O client rebuild (APK build 10 + Windows); PRODUCT_BLUEPRINT v2.2; housekeeping notes; full founder audit |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |

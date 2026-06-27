@@ -79,7 +79,7 @@ This is a real consumer product in **founder + closed tester** phase, not a publ
 
 | Piece | Status |
 |-------|--------|
-| API | Cloud Run `ssc-api-00021-6k6` · `https://api.supersecurechat.com` |
+| API | Cloud Run `ssc-api-00022-jzs` · `https://api.supersecurechat.com` |
 | Health | mongo ✅ · redis ✅ · ws_fanout redis |
 | DB | MongoDB Atlas `ssc` |
 | Sessions / rate limits | Upstash Redis |
