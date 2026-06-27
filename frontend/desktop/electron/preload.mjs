@@ -29,9 +29,25 @@ const secureStorage = {
   remove: (key) => ipcRenderer.invoke('secure-storage-remove', key),
 };
 
+const notifications = {
+  show: (opts) => ipcRenderer.invoke('desktop-show-notification', opts || {}),
+  setEnabled: (enabled) => ipcRenderer.invoke('desktop-set-notifications-enabled', enabled),
+  onNavigate: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('desktop-navigate', handler);
+    return () => ipcRenderer.removeListener('desktop-navigate', handler);
+  },
+};
+
+const windowApi = {
+  focus: () => ipcRenderer.invoke('desktop-focus-window'),
+};
+
 contextBridge.exposeInMainWorld('sscDesktop', {
   isDesktop: true,
   platform: process.platform,
   libsignal,
   secureStorage,
+  notifications,
+  window: windowApi,
 });

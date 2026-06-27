@@ -21,10 +21,14 @@ import TwoFAModal from './TwoFAModal';
 import PanicButton from './PanicButton';
 import { subscribePush } from '../lib/push';
 import { subscribeNativePush } from '../lib/native-push';
+import {
+  areDesktopNotificationsEnabled,
+  setDesktopNotificationsEnabled,
+} from '../lib/desktopNotifications';
 import { unwrapPrivateKey, wrapPrivateKey } from '../lib/crypto';
 import { saveVaultCredential } from '../lib/vaultCredentialStore';
 
-const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.9';
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.10';
 
 function platformLabel(t) {
   if (isNativeApp()) return t('settingsPlatformAndroid');
@@ -59,6 +63,9 @@ export default function SettingsModal({ open, onClose }) {
   const [blockedContacts, setBlockedContacts] = useState([]);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushOk, setPushOk] = useState(false);
+  const [desktopNotifEnabled, setDesktopNotifEnabled] = useState(
+    () => areDesktopNotificationsEnabled(),
+  );
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
@@ -73,6 +80,9 @@ export default function SettingsModal({ open, onClose }) {
   useEffect(() => {
     if (open && user) {
       setLanguage(user.language || 'en');
+    }
+    if (open && isElectronApp()) {
+      setDesktopNotifEnabled(areDesktopNotificationsEnabled());
     }
   }, [open, user]);
 
@@ -118,6 +128,13 @@ export default function SettingsModal({ open, onClose }) {
     } finally {
       setPushBusy(false);
     }
+  };
+
+  const toggleDesktopNotifications = () => {
+    const next = !desktopNotifEnabled;
+    setDesktopNotificationsEnabled(next);
+    setDesktopNotifEnabled(next);
+    toast.success(next ? t('settingsDesktopNotifOn') : t('settingsDesktopNotifOff'));
   };
 
   const deleteAccount = async (e) => {
@@ -459,15 +476,29 @@ export default function SettingsModal({ open, onClose }) {
             </Section>
 
             <Section icon={Bell} title={t('settingsNotifications')} testId="settings-notifications-section">
-              <button
-                type="button"
-                disabled={pushBusy || pushOk}
-                onClick={enablePush}
-                className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#27272A] rounded-md hover:bg-[#232323] disabled:opacity-50"
-                data-testid="settings-enable-push"
-              >
-                {pushBusy ? t('processing') : pushOk ? t('settingsPushEnabled') : t('settingsEnablePush')}
-              </button>
+              {isElectronApp() ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleDesktopNotifications}
+                    className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#27272A] rounded-md hover:bg-[#232323]"
+                    data-testid="settings-desktop-notifications"
+                  >
+                    {desktopNotifEnabled ? t('settingsDesktopNotifOn') : t('settingsEnableDesktopNotif')}
+                  </button>
+                  <p className="mt-2 text-[10px] text-[#71717A]">{t('settingsDesktopNotifHint')}</p>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pushBusy || pushOk}
+                  onClick={enablePush}
+                  className="w-full py-2.5 text-xs font-mono tracking-wider border border-[#27272A] rounded-md hover:bg-[#232323] disabled:opacity-50"
+                  data-testid="settings-enable-push"
+                >
+                  {pushBusy ? t('processing') : pushOk ? t('settingsPushEnabled') : t('settingsEnablePush')}
+                </button>
+              )}
             </Section>
 
             <Section icon={Lifebuoy} title={t('settingsHelp')} testId="settings-help-section">

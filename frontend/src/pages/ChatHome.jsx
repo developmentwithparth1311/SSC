@@ -39,7 +39,15 @@ import {
   minimizeNativeApp,
   setNativeBackHandler,
 } from '../lib/nativeBack';
-import { isInstalledClient, isNativeApp } from '../lib/platform';
+import { isElectronApp, isInstalledClient, isNativeApp } from '../lib/platform';
+import {
+  areDesktopNotificationsEnabled,
+  maybeNotifyDesktopMessage,
+  notifyDesktopFriendRequest,
+  notifyDesktopIncomingCall,
+  subscribeDesktopNavigation,
+  syncDesktopNotificationPref,
+} from '../lib/desktopNotifications';
 import { bootstrapSignalIdentity } from '../lib/signalIdentityBootstrap';
 import { ensureMediaPermissions } from '../lib/mediaPermissions';
 import { startIncomingRingtone, stopIncomingRingtone } from '../lib/callRingtone';
@@ -126,6 +134,16 @@ export default function ChatHome() {
   const socketRef = useRef(null);
   const scrollRef = useRef(null);
   const refreshContactsRosterRef = useRef(null);
+  const conversationsRef = useRef(conversations);
+  const myContactsRef = useRef(myContacts);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    myContactsRef.current = myContacts;
+  }, [myContacts]);
 
   useEffect(() => {
     const closeSocket = () => {
@@ -387,7 +405,11 @@ export default function ChatHome() {
 
   useEffect(() => {
     if (hasIncomingCall) {
-      startIncomingRingtone();
+      const backgrounded = document.hidden || !document.hasFocus();
+      const notifOn = areDesktopNotificationsEnabled();
+      if (!backgrounded || notifOn) {
+        startIncomingRingtone();
+      }
     } else {
       stopIncomingRingtone();
     }
@@ -633,6 +655,22 @@ export default function ChatHome() {
     subscribeNativePush().catch(() => {});
   }, [user]);
 
+  useEffect(() => {
+    if (!isElectronApp()) return undefined;
+    if (!user?.user_id) {
+      window.sscDesktop?.notifications?.setEnabled?.(false).catch(() => {});
+      return undefined;
+    }
+    syncDesktopNotificationPref();
+    return subscribeDesktopNavigation((payload) => {
+      if (payload?.conversationId) {
+        goToConversation(payload.conversationId);
+      } else if (payload?.route) {
+        navigate(payload.route);
+      }
+    });
+  }, [user?.user_id, goToConversation, navigate]);
+
   // ─── Socket ───
   useEffect(() => {
     if (!user) return;
@@ -654,6 +692,14 @@ export default function ChatHome() {
             setMessages((m) => [...m, incoming]);
           }
           loadConversations();
+          maybeNotifyDesktopMessage(incoming, {
+            myUserId: user.user_id,
+            activeId,
+            conversations: conversationsRef.current,
+            myContacts: myContactsRef.current,
+            formatGroupLabel: formatGroupConversationLabel,
+            isPeerMutedFn: isPeerMuted,
+          }).catch(() => {});
         } else if (data.type === 'typing') {
           if (data.conversation_id === activeId && data.user_id !== user?.user_id) {
             setTypingFrom(data.username);
@@ -689,6 +735,12 @@ export default function ChatHome() {
             } else {
               setCallState({ mode: offer.mode, direction: 'incoming', peer: peerData, signal: { sdp: offer.sdp } });
             }
+            notifyDesktopIncomingCall({
+              fromUsername: peerData.username,
+              mode: offer.mode,
+              group: !!offer.group,
+              conversationId: offer.conversation_id || null,
+            }).catch(() => {});
           })();
         } else if (data.type === 'read') {
           // read receipt from another user
@@ -710,6 +762,7 @@ export default function ChatHome() {
           refreshContactsRosterRef.current?.({ full });
           if (data.type === 'friend-request' && data.from_username) {
             toast.message(t('friendRequestIncoming', { user: data.from_username }));
+            notifyDesktopFriendRequest(data.from_username).catch(() => {});
           } else if (data.type === 'friend-accepted' && data.contact_username) {
             toast.success(t('friendRequestAcceptedBy', { user: data.contact_username }));
           }

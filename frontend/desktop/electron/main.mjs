@@ -1,4 +1,13 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  safeStorage,
+  Tray,
+  Menu,
+  nativeImage,
+  Notification,
+} from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,12 +18,64 @@ const DESKTOP_AUTH_SCHEME = 'chat.ssc.secure.desktop';
 
 let mainWindow = null;
 let pendingAuthUrl = null;
+let tray = null;
+let isQuitting = false;
+let notificationsAllowed = true;
 
 function rendererIndex() {
   if (!app.isPackaged) {
     return path.join(__dirname, '../../build/index.html');
   }
   return path.join(process.resourcesPath, 'renderer', 'index.html');
+}
+
+function trayIconPath() {
+  if (!app.isPackaged) {
+    return path.join(__dirname, '../../public/icons/icon-192.png');
+  }
+  return path.join(process.resourcesPath, 'renderer', 'icons', 'icon-192.png');
+}
+
+function getTrayIcon() {
+  const iconPath = trayIconPath();
+  if (!fs.existsSync(iconPath)) return nativeImage.createEmpty();
+  const img = nativeImage.createFromPath(iconPath);
+  if (process.platform === 'win32' && !img.isEmpty()) {
+    return img.resize({ width: 16, height: 16 });
+  }
+  return img;
+}
+
+function focusMainWindow() {
+  if (!mainWindow) return false;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  return true;
+}
+
+function createTray() {
+  if (tray) return;
+  const icon = getTrayIcon();
+  if (icon.isEmpty()) return;
+  tray = new Tray(icon);
+  tray.setToolTip('SSC — Super Secure Chat');
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Open SSC',
+      click: () => focusMainWindow(),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(menu);
+  tray.on('double-click', () => focusMainWindow());
 }
 
 function isDesktopAuthUrl(url) {
@@ -28,8 +89,7 @@ function routeAuthDeepLink(url) {
     const authPath = parsed.pathname || '/auth/google';
     const hashRoute = `${authPath}${parsed.search}${parsed.hash}`;
     if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
+      focusMainWindow();
       mainWindow.loadFile(rendererIndex(), { hash: hashRoute });
     } else {
       pendingAuthUrl = hashRoute;
@@ -85,6 +145,13 @@ function createWindow() {
 
   attachOAuthNavigationGuards(mainWindow);
 
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
@@ -105,19 +172,18 @@ if (!singleInstance) {
   app.on('second-instance', (_event, argv) => {
     const authUrl = argv.find((arg) => arg.startsWith(`${DESKTOP_AUTH_SCHEME}://`));
     if (authUrl) routeAuthDeepLink(authUrl);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
+    focusMainWindow();
   });
 }
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') {
+    app.setAppUserModelId('chat.ssc.secure.desktop');
     const winUrl = process.argv.find((arg) => arg.startsWith(`${DESKTOP_AUTH_SCHEME}://`));
     if (winUrl) routeAuthDeepLink(winUrl);
   }
   createWindow();
+  createTray();
   try {
     initLibsignalBridge(app.getPath('userData'));
   } catch (err) {
@@ -125,6 +191,7 @@ app.whenReady().then(() => {
   }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else focusMainWindow();
   });
 });
 
@@ -133,8 +200,12 @@ app.on('open-url', (event, url) => {
   routeAuthDeepLink(url);
 });
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Stay in tray so WebSocket + notifications keep working while backgrounded.
 });
 
 ipcMain.handle('libsignal', async (_event, { method, args }) => {
@@ -182,4 +253,36 @@ ipcMain.handle('secure-storage-remove', (_event, key) => {
   const store = readSecureStore();
   delete store[key];
   writeSecureStore(store);
+});
+
+ipcMain.handle('desktop-set-notifications-enabled', (_event, enabled) => {
+  notificationsAllowed = !!enabled;
+  return true;
+});
+
+ipcMain.handle('desktop-focus-window', () => focusMainWindow());
+
+ipcMain.handle('desktop-show-notification', (_event, opts = {}) => {
+  if (!notificationsAllowed) return false;
+  if (!Notification.isSupported()) return false;
+  const icon = getTrayIcon();
+  const notification = new Notification({
+    title: opts.title || 'SSC',
+    body: opts.body || '',
+    silent: opts.silent === true,
+    urgency: opts.urgency || 'normal',
+    icon: icon.isEmpty() ? undefined : icon,
+  });
+  notification.on('click', () => {
+    focusMainWindow();
+    if (opts.conversationId && mainWindow) {
+      mainWindow.webContents.send('desktop-navigate', { conversationId: opts.conversationId });
+    } else if (opts.kind === 'call' && mainWindow) {
+      mainWindow.webContents.send('desktop-navigate', { route: '/chat' });
+    } else if (opts.kind === 'friend_request' && mainWindow) {
+      mainWindow.webContents.send('desktop-navigate', { route: '/chat' });
+    }
+  });
+  notification.show();
+  return true;
 });
