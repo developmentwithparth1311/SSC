@@ -8,7 +8,13 @@ import {
   hasSignalSession,
   isNativeLibsignalAvailable,
 } from './nativeLibsignal';
-import { ensureSignalSession } from './x3dh';
+import { ensureSignalSession, forceRefreshSignalSession } from './x3dh';
+
+/** Match the native-plugin "session not found" error family across Android and Electron. */
+function isSessionNotFoundError(err) {
+  const m = (err?.message || '').toLowerCase();
+  return m.includes('session') && (m.includes('not found') || m.includes('no session') || m.includes('session record'));
+}
 
 export function isSignalV1Message(msg) {
   return (msg?.protocol || ProtocolVersion.LEGACY_RSA) === ProtocolVersion.SIGNAL_V1;
@@ -27,7 +33,17 @@ export async function canUseSignalMessaging(peerUserId, ourUserId, peerHasPrekey
 }
 
 export async function encryptSignalText(peerUserId, ourUserId, plaintext) {
-  return nativeEncrypt(peerUserId, ourUserId, plaintext ?? '');
+  await ensureSignalSession(peerUserId, ourUserId);
+  try {
+    return await nativeEncrypt(peerUserId, ourUserId, plaintext ?? '');
+  } catch (err) {
+    if (!isSessionNotFoundError(err)) throw err;
+    // Native store inconsistency: hasSession reported true but encryptSignalMessage
+    // couldn't find the ratchet state. Force a fresh session establishment and retry once.
+    console.warn('[SSC] encryptSignalText: session not found at encrypt time — forcing re-establish for', peerUserId);
+    await forceRefreshSignalSession(peerUserId, ourUserId);
+    return await nativeEncrypt(peerUserId, ourUserId, plaintext ?? '');
+  }
 }
 
 export async function decryptSignalText(peerUserId, ourUserId, msg) {

@@ -115,10 +115,18 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
 
     const signalingCtx = { peerUserId: peer.user_id, ourUserId: user?.user_id, peer, user, isGroup: false };
 
+    // Show at most one encryption-failure toast per call setup to avoid flooding
+    // the user with one notification per ICE candidate (typically 8–15 candidates).
+    let iceEncryptErrShown = false;
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         sendSignaling(socket, { type: 'ice-candidate', to: peer.user_id, candidate: e.candidate }, signalingCtx)
-          .catch((err) => { toastSignalingFailure(err, t); });
+          .catch((err) => {
+            if (!iceEncryptErrShown) {
+              iceEncryptErrShown = true;
+              toastSignalingFailure(err, t);
+            }
+          });
       }
     };
     pc.ontrack = (e) => {

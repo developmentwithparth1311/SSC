@@ -29,7 +29,13 @@ export async function ensureSignalSession(peerUserId, ourUserId) {
     }
     const bundle = await fetchPeerPreKeyBundle(peerUserId);
     const result = await establishSignalSession(peerUserId, bundle, ourUserId);
-    return { ...result, has_session: result?.has_session ?? true };
+    // Verify the session was actually persisted to the native store.
+    // If not, log a warning — the retry path in encryptSignalText will recover.
+    const verify = await hasSignalSession(peerUserId);
+    if (!verify?.has_session) {
+      console.warn('[SSC] Signal session may not have persisted for', peerUserId, '— will retry at first encrypt');
+    }
+    return { ...result, has_session: verify?.has_session ?? result?.has_session ?? true };
   })();
 
   sessionPromises.set(peerUserId, work);
@@ -38,4 +44,16 @@ export async function ensureSignalSession(peerUserId, ourUserId) {
   } finally {
     sessionPromises.delete(peerUserId);
   }
+}
+
+/**
+ * Force a fresh session establishment without checking hasSignalSession first.
+ * Used to recover when the native store reports a session exists but
+ * encryptSignalMessage fails with "session not found" (stale/incomplete write).
+ */
+export async function forceRefreshSignalSession(peerUserId, ourUserId) {
+  if (!peerUserId || !ourUserId) return;
+  if (!isNativeLibsignalAvailable()) return;
+  const bundle = await fetchPeerPreKeyBundle(peerUserId);
+  await establishSignalSession(peerUserId, bundle, ourUserId);
 }

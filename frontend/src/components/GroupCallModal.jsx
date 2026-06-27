@@ -57,6 +57,9 @@ export default function GroupCallModal({
   const [duration, setDuration] = useState(0);
   const startRef = useRef(null);
   const [status, setStatus] = useState(direction === 'outgoing' ? 'calling' : 'incoming');
+  // Guard: show at most one encryption-failure toast per call to avoid flooding
+  // the user with one notification per ICE candidate (typically 8–15 per peer).
+  const signalingErrShownRef = useRef(false);
 
   const signalingCtx = useMemo(() => ({
     ourUserId: me?.user_id,
@@ -71,7 +74,8 @@ export default function GroupCallModal({
     try {
       await sendSignaling(socket, { ...msg, group: true }, signalingCtx);
     } catch (err) {
-      if (toastSignalingFailure(err, t)) {
+      if (!signalingErrShownRef.current && toastSignalingFailure(err, t)) {
+        signalingErrShownRef.current = true;
         onClose?.();
       }
       throw err;
