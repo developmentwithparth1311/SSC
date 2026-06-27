@@ -137,6 +137,20 @@ export async function decryptGroupMessage(senderUserId, ciphertext) {
   });
 }
 
+/** Drop one peer session after remote identity rotation. */
+export async function deleteSignalSession(peerUserId) {
+  const client = getLibsignalClient();
+  if (!client?.deleteSession) return { deleted: false, reason: 'unavailable' };
+  return client.deleteSession({ peer_user_id: peerUserId });
+}
+
+/** Drop peer sessions only — used when server identity no longer matches this device. */
+export async function clearAllSignalSessions() {
+  const client = getLibsignalClient();
+  if (!client?.clearAllSessions) return { cleared: false, reason: 'unavailable' };
+  return client.clearAllSessions();
+}
+
 /** Panic wipe / reinstall — drop local Signal state so sessions can be rebuilt. */
 export async function wipeLocalSignalStore() {
   const client = getLibsignalClient();

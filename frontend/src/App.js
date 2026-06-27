@@ -16,7 +16,7 @@ import InstalledClientGate from './components/InstalledClientGate';
 import DeepLinkListener from './components/DeepLinkListener';
 import { getSessionToken } from './lib/sessionStore';
 import { hideNativeSplash } from './lib/capacitor-init';
-import { isInstalledClient, prefersHashRouter } from './lib/platform';
+import { isElectronApp, isInstalledClient, prefersHashRouter } from './lib/platform';
 import { bootstrapSignalIdentity, userHasUnifiedIdentity } from './lib/signalIdentityBootstrap';
 import './App.css';
 
@@ -40,6 +40,23 @@ function Protected({ children }) {
   const [identityBoot, setIdentityBoot] = React.useState(isInstalledClient() ? 'pending' : 'done');
   const [identityRetry, setIdentityRetry] = React.useState(0);
   const [sessionRecovery, setSessionRecovery] = React.useState('idle');
+  const [desktopLibsignal, setDesktopLibsignal] = React.useState(
+    isElectronApp() ? null : { ok: true },
+  );
+
+  React.useEffect(() => {
+    if (!isElectronApp() || !window.sscDesktop?.libsignalInitStatus) {
+      setDesktopLibsignal({ ok: true });
+      return undefined;
+    }
+    let cancelled = false;
+    window.sscDesktop.libsignalInitStatus().then((status) => {
+      if (!cancelled) setDesktopLibsignal(status);
+    }).catch(() => {
+      if (!cancelled) setDesktopLibsignal({ ok: false, error: 'status_unavailable' });
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     if (loading || user) {
@@ -72,8 +89,19 @@ function Protected({ children }) {
     setIdentityRetry((n) => n + 1);
   };
 
-  if (loading || sessionRecovery === 'pending' || identityBoot === 'pending') {
+  if (loading || sessionRecovery === 'pending' || identityBoot === 'pending' || desktopLibsignal == null) {
     return <div className="mobile-shell flex items-center justify-center bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs safe-top safe-bottom">{t('initializing')}</div>;
+  }
+  if (isElectronApp() && desktopLibsignal && !desktopLibsignal.ok) {
+    return (
+      <div className="mobile-shell flex flex-col items-center justify-center gap-3 bg-[#0A0A0A] text-[#A1A1AA] font-mono text-xs p-6 text-center safe-top safe-bottom">
+        <p>{t('encryptionErrLibsignal')}</p>
+        {desktopLibsignal.error && (
+          <p className="text-[10px] text-[#FF3B30] break-all max-w-md">{desktopLibsignal.error}</p>
+        )}
+        <p className="text-[10px]">{t('signalIdentityRetry')}</p>
+      </div>
+    );
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   if (!user.username || !user.public_key) return <Navigate to="/setup" replace />;

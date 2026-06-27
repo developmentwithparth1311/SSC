@@ -6,6 +6,15 @@ def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def ws_connect_url(api: str, ws_base: str, token: str) -> str:
+    """Production WS auth — short-lived ticket from POST /auth/ws-ticket."""
+    r = requests.post(f"{api}/auth/ws-ticket", headers=auth_headers(token), timeout=15)
+    assert r.status_code == 200, r.text
+    ticket = r.json().get("ticket")
+    assert ticket, "ws-ticket missing from response"
+    return f"{ws_base}/api/ws?ticket={ticket}"
+
+
 def make_mutual_contacts(api: str, token_from: str, token_to: str, username_to: str) -> None:
     """From-user sends a friend request; to-user accepts (bidirectional contacts)."""
     r = requests.post(

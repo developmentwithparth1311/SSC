@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Dev/LAN: allow HTTP to local backend (remove or tighten for production HTTPS). -->
+<!-- Production: HTTPS only. Cleartext limited to dev/LAN domains below. -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">192.168.1.154</domain>
         <domain includeSubdomains="true">localhost</domain>

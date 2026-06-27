@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
+import { t, getStoredUiLang } from '../lib/i18n';
 import { unwrapPrivateKey } from '../lib/crypto';
 import { unsubscribePush } from '../lib/push';
 import { unsubscribeNativePush } from '../lib/native-push';
@@ -30,6 +32,32 @@ import {
 
 const AuthCtx = createContext(null);
 
+function notifyEncryptionBootstrapFailure(result) {
+  if (!isInstalledClient()) return;
+  const lang = getStoredUiLang();
+  let key = 'encryptionErrBootstrap';
+  if (result?.reason === 'libsignal_unavailable') key = 'encryptionErrLibsignal';
+  console.warn('[SSC] encryption bootstrap failed:', result?.reason || 'unknown');
+  toast.error(t(key, lang));
+}
+
+async function syncPrekeysOnInstalledClient({ notify = false } = {}) {
+  if (!isInstalledClient()) return { ok: true, skipped: true };
+  try {
+    const result = await ensurePreKeysUploaded();
+    if (result?.skipped && result?.reason === 'web') {
+      const failure = { ok: false, reason: 'libsignal_unavailable' };
+      if (notify) notifyEncryptionBootstrapFailure(failure);
+      return failure;
+    }
+    return { ok: true, result };
+  } catch (err) {
+    console.error('[SSC] prekey upload failed:', err?.message || err);
+    if (notify) toast.error(t('encryptionErrBootstrap', getStoredUiLang()));
+    return { ok: false, reason: err?.message || 'prekey_upload_failed' };
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +85,9 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data);
-      ensurePreKeysUploaded().catch(() => {});
+      syncPrekeysOnInstalledClient().catch((err) => {
+        console.error('[SSC] background prekey sync failed:', err?.message || err);
+      });
       await tryAutoUnlockVault(data);
       return data;
     } catch (err) {
@@ -71,8 +101,19 @@ export function AuthProvider({ children }) {
   }, [tryAutoUnlockVault]);
 
   const runSilentBootstrap = useCallback(async () => {
-    if (!isInstalledClient()) return;
-    await bootstrapSignalIdentity(refreshUser).catch(() => {});
+    if (!isInstalledClient()) return { ok: true, skipped: true };
+    const pre = await syncPrekeysOnInstalledClient({ notify: true });
+    if (!pre?.ok) return pre;
+    const boot = await bootstrapSignalIdentity(refreshUser);
+    if (!boot?.ok) {
+      notifyEncryptionBootstrapFailure(boot);
+      return boot;
+    }
+    const fresh = await refreshUser();
+    if (fresh && !fresh.signal_prekeys_ready) {
+      toast.error(t('encryptionErrSelfPrekeys', getStoredUiLang()));
+    }
+    return boot;
   }, [refreshUser]);
 
   useEffect(() => {
@@ -109,11 +150,19 @@ export function AuthProvider({ children }) {
     await persistSessionToken(token);
     setUser(userObj);
     autoUnlockAttempted.current = null;
-    ensurePreKeysUploaded().catch(() => {});
     await tryAutoUnlockVault(userObj);
     if (isInstalledClient()) {
-      await bootstrapSignalIdentity(refreshUser).catch(() => {});
-      await refreshUser();
+      const pre = await syncPrekeysOnInstalledClient({ notify: true });
+      if (pre?.ok) {
+        const boot = await bootstrapSignalIdentity(refreshUser);
+        if (!boot?.ok) {
+          notifyEncryptionBootstrapFailure(boot);
+        }
+      }
+      const fresh = await refreshUser();
+      if (fresh && !fresh.signal_prekeys_ready) {
+        toast.error(t('encryptionErrSelfPrekeys', getStoredUiLang()));
+      }
     }
   };
 

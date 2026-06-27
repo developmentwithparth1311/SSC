@@ -426,6 +426,37 @@ public class SscLibsignalPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void deleteSession(PluginCall call) {
+        try {
+            String peerUserId = call.getString("peer_user_id");
+            if (peerUserId == null || peerUserId.isEmpty()) {
+                call.reject("peer_user_id required");
+                return;
+            }
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.deleteSessionForPeer(peerUserId);
+            JSObject ret = new JSObject();
+            ret.put("deleted", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("deleteSession failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
+    public void clearAllSessions(PluginCall call) {
+        try {
+            SscSignalStore store = SscSignalStore.getInstance(getContext());
+            store.clearAllSessions();
+            JSObject ret = new JSObject();
+            ret.put("cleared", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("clearAllSessions failed: " + e.getMessage(), e);
+        }
+    }
+
+    @PluginMethod
     public void resetLocalStore(PluginCall call) {
         try {
             SscSignalStore.wipeAll(getContext());

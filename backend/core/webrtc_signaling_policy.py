@@ -11,7 +11,9 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from core.signal_message_policy import (
+    ALLOWED_GROUP_SIGNAL_MESSAGE_TYPES,
     SignalMessageValidationError,
+    validate_distribution_id,
     validate_signal_ciphertext,
     validate_signal_message_type,
 )
@@ -50,15 +52,25 @@ def _validate_legacy_payload(msg_type: str, data: Dict[str, Any]) -> None:
         raise SignalingValidationError(f"sdp required for legacy {msg_type}")
 
 
+def _validate_signaling_message_type(data: Dict[str, Any]) -> int:
+    """1:1 signaling uses whisper/prekey (2/3); group uses sender-key (7)."""
+    raw_type = data.get("signal_message_type")
+    if data.get("group"):
+        if not isinstance(raw_type, int) or raw_type not in ALLOWED_GROUP_SIGNAL_MESSAGE_TYPES:
+            raise SignalingValidationError("signal_message_type must be 7 (senderkey) for group signal_v1 signaling")
+        return raw_type
+    return validate_signal_message_type(raw_type)
+
+
 def _validate_signal_v1_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     if data.get("sdp") or data.get("candidate"):
         raise SignalingValidationError("cleartext sdp/candidate not allowed with signal_v1 signaling")
     try:
         ciphertext = validate_signal_ciphertext(data.get("signaling_ciphertext") or "")
-        message_type = validate_signal_message_type(data.get("signal_message_type"))
+        message_type = _validate_signaling_message_type(data)
     except SignalMessageValidationError as exc:
         raise SignalingValidationError(str(exc)) from exc
-    return {
+    out: Dict[str, Any] = {
         **data,
         "signaling_protocol": SignalingProtocol.SIGNAL_V1.value,
         "signaling_ciphertext": ciphertext,
@@ -66,6 +78,12 @@ def _validate_signal_v1_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "sdp": None,
         "candidate": None,
     }
+    if data.get("group"):
+        try:
+            out["distribution_id"] = validate_distribution_id(data.get("distribution_id"))
+        except SignalMessageValidationError as exc:
+            raise SignalingValidationError(str(exc)) from exc
+    return out
 
 
 def validate_signaling_relay(data: Dict[str, Any]) -> Dict[str, Any]:

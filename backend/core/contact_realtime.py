@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from core.contact_helpers import get_mutual_contact_ids
 from core.realtime import manager
 
 
@@ -85,3 +86,17 @@ async def notify_contacts_changed(user_id: str, *, reason: str, request_id: Opti
     if request_id:
         payload["request_id"] = request_id
     await _send(user_id, payload)
+
+
+async def notify_signal_identity_changed(user_id: str, *, identity_key_public: str) -> None:
+    """Tell mutual contacts to drop stale Signal sessions after prekey identity rotation."""
+    if not user_id or not identity_key_public:
+        return
+    contact_ids = await get_mutual_contact_ids(user_id)
+    payload = {
+        "type": "identity-changed",
+        "user_id": user_id,
+        "identity_key_public": identity_key_public,
+    }
+    for contact_id in contact_ids:
+        await _send(contact_id, payload)

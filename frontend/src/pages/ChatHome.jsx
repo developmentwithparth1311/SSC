@@ -4,8 +4,7 @@ import { toast } from 'sonner';
 import { MagnifyingGlass, Plus, SignOut, Phone, VideoCamera, PaperPlaneTilt, Paperclip, ShieldCheck, Translate, X, UsersThree, Gear, Microphone, CaretLeft } from '@phosphor-icons/react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { ChatSocket } from '../lib/socket';
-import { decryptMessage, encryptBytesForRecipients, encryptMessageForRecipients, b64ToBytes } from '../lib/crypto';
+
 
 import { subscribePush } from '../lib/push';
 import { subscribeNativePush } from '../lib/native-push';
@@ -29,61 +28,37 @@ import GroupCallModal from '../components/GroupCallModal';
 import { StoriesBar, StoryViewer } from '../components/Stories';
 import ContactsModal from '../components/ContactsModal';
 import { formatPeerPresence } from '../lib/presence';
-import {
-  isContactRealtimeEvent,
-  subscribeContactsRefresh,
-} from '../lib/contactRealtime';
+
 import { chatListPath, chatNavigateOptions, chatThreadPath } from '../lib/chatNavigation';
 import {
   clearNativeBackHandler,
   minimizeNativeApp,
   setNativeBackHandler,
 } from '../lib/nativeBack';
-import { isElectronApp, isInstalledClient, isNativeApp } from '../lib/platform';
+import { isElectronApp, isNativeApp } from '../lib/platform';
 import {
   areDesktopNotificationsEnabled,
-  maybeNotifyDesktopMessage,
-  notifyDesktopFriendRequest,
-  notifyDesktopIncomingCall,
   subscribeDesktopNavigation,
   syncDesktopNotificationPref,
 } from '../lib/desktopNotifications';
-import { bootstrapSignalIdentity } from '../lib/signalIdentityBootstrap';
-import { ensureMediaPermissions } from '../lib/mediaPermissions';
+import { useChatSocket } from '../chat/useChatSocket';
+import { useChatContacts } from '../chat/useChatContacts';
+import { useChatMessages } from '../chat/useChatMessages';
+import { useMessagingSend } from '../chat/useMessagingSend';
+import { useChatCalls } from '../chat/useChatCalls';
+import { useHoldToRecord } from '../chat/useHoldToRecord';
+
 import { startIncomingRingtone, stopIncomingRingtone } from '../lib/callRingtone';
-import {
-  MIN_VOICE_BLOB_BYTES,
-  startVoiceRecording,
-  voiceFilenameForMime,
-} from '../lib/voiceRecorder';
 import {
   isPeerBlocked,
   isPeerMuted,
-  visibleConversations,
 } from '../lib/contactFilters';
 import { formatGroupConversationLabel } from '../lib/groupDisplayLabel';
 import { clearLocalGroupLabels } from '../lib/groupLabels';
 
 import { registerMemoryWipeHandler, registerSocketCloser } from '../lib/memoryWipe';
-import { getSessionToken } from '../lib/sessionStore';
-import { ensureSignalSession } from '../lib/signal/x3dh';
-import { encryptAttachmentBytes, encryptSignalAttachment } from '../lib/signal/attachments';
-import {
-  ensureGroupSenderKeysDistributed,
-  encryptGroupText,
-  processIncomingSkdmMessage,
-} from '../lib/signal/groupMessages';
-import { SKDM_MESSAGE_TYPE } from '../lib/signal/constants';
-import { STATUS_SKDM_MESSAGE_TYPE, processIncomingStatusSkdmMessage } from '../lib/signal/statuses';
-import { encryptSignalText } from '../lib/signal/messages';
-import { ProtocolVersion } from '../lib/signal/constants';
-import {
-  decryptMessageBody,
-} from '../lib/signal/migration';
 import { fetchRetentionConfig } from '../lib/publicConfig';
-import { prepareInstalledMessaging, usesSignalOnlyMessaging } from '../lib/signal/installedMessaging';
-import { maySendLegacyRsa } from '../lib/signal/legacyRsaPolicy';
-import { unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
+import { resolveIncomingSignaling } from '../chat/signalingInbound';
 
 const PENDING_CALL_KEY = 'ssc_pending_call';
 
@@ -91,11 +66,7 @@ export default function ChatHome() {
   const { user, privateKey, logout, panicWipe, refreshUser } = useAuth();
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [messageFilter, setMessageFilter] = useState('');
-  const [decryptedBodies, setDecryptedBodies] = useState({});
   const [draft, setDraft] = useState('');
   const [autoTranslate, setAutoTranslate] = useState(false);
   const [translationEnabled, setTranslationEnabled] = useState(false);
@@ -104,13 +75,8 @@ export default function ChatHome() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [myContacts, setMyContacts] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [outgoingRequests, setOutgoingRequests] = useState([]);
-
   const [contactsOpen, setContactsOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const voiceRecordingRef = useRef(null);
+
   const [typingFrom, setTypingFrom] = useState(null);
   const [callState, setCallState] = useState(null); // { mode, direction, peer, signal }
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -118,32 +84,88 @@ export default function ChatHome() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [confirmRemoveUid, setConfirmRemoveUid] = useState(null);
   const [mobileMsgSearchOpen, setMobileMsgSearchOpen] = useState(false);
-  const userNearBottomRef = useRef(true);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupManageOpen, setGroupManageOpen] = useState(false);
-  const [conversationsLoading, setConversationsLoading] = useState(true);
-  const [messagesLoading, setMessagesLoading] = useState(false);
+
   const [storyGroup, setStoryGroup] = useState(null);
   const [groupCallState, setGroupCallState] = useState(null); // {mode, direction, members, signal}
   const [convActionsTarget, setConvActionsTarget] = useState(null);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [reads, setReads] = useState([]); // [{user_id, last_read_message_id}]
   const [retentionHours, setRetentionHours] = useState(24);
   const socketRef = useRef(null);
   const scrollRef = useRef(null);
-  const refreshContactsRosterRef = useRef(null);
-  const conversationsRef = useRef(conversations);
-  const myContactsRef = useRef(myContacts);
+  const { t } = useLocale();
 
-  useEffect(() => {
-    conversationsRef.current = conversations;
-  }, [conversations]);
+  const goToConversation = useCallback((id) => {
+    setActiveId(id);
+    if (id) {
+      navigate(chatThreadPath(id), chatNavigateOptions(id));
+    } else {
+      navigate(chatListPath(), chatNavigateOptions(null));
+    }
+  }, [navigate]);
 
-  useEffect(() => {
-    myContactsRef.current = myContacts;
-  }, [myContacts]);
+  const leaveChat = useCallback(() => {
+    setChatMenuOpen(false);
+    setMobileMsgSearchOpen(false);
+    goToConversation(null);
+  }, [goToConversation]);
+
+  const {
+    conversations,
+    setConversations,
+    conversationsLoading,
+    myContacts,
+    pendingRequests,
+    outgoingRequests,
+    conversationsRef,
+    myContactsRef,
+    refreshContactsRosterRef,
+    loadConversations,
+    sidebarConversations,
+    activeConv,
+    peer,
+    isGroup,
+    acceptedContacts,
+    sendFriendRequest,
+    acceptRequest,
+    rejectRequest,
+    toggleBlock,
+    toggleMute,
+    removeContact,
+    confirmRemoveContact,
+    deleteConversation,
+    refreshActiveGroup,
+  } = useChatContacts({
+    user,
+    t,
+    activeId,
+    leaveChat,
+    confirmRemoveUid,
+    setConfirmRemoveUid,
+  });
+
+  const {
+    messages,
+    setMessages,
+    messagesLoading,
+    reads,
+    setReads,
+    messageFilter,
+    setMessageFilter,
+    filteredMessages,
+    userNearBottomRef,
+    onMessagesScroll,
+  } = useChatMessages({
+    activeId,
+    user,
+    peer,
+    privateKey,
+    isGroup,
+    activeConv,
+  });
 
   useEffect(() => {
     const closeSocket = () => {
@@ -156,11 +178,9 @@ export default function ChatHome() {
     const unsubWipe = registerMemoryWipeHandler(() => {
       closeSocket();
       setMessages([]);
-      setDecryptedBodies({});
       setDraft('');
       setConversations([]);
       setReads([]);
-      setMessageFilter('');
       setTypingFrom(null);
       setStoryGroup(null);
       setCallState(null);
@@ -173,27 +193,7 @@ export default function ChatHome() {
       unsubSocket();
       unsubWipe();
     };
-  }, []);
-
-  const sidebarConversations = useMemo(
-    () => visibleConversations(conversations, myContacts),
-    [conversations, myContacts],
-  );
-  const acceptedContacts = useMemo(
-    () => myContacts
-      .filter((c) => !c.blocked)
-      .sort((a, b) => (a.username || '').localeCompare(b.username || '')),
-    [myContacts],
-  );
-
-  const activeConv = useMemo(
-    () => sidebarConversations.find((c) => c.conversation_id === activeId)
-      || conversations.find((c) => c.conversation_id === activeId),
-    [sidebarConversations, conversations, activeId],
-  );
-  const peer = activeConv?.peer;
-  const isGroup = !!activeConv?.is_group;
-  const { t } = useLocale();
+  }, [setConversations, setMessages, setReads]);
   const headerTitle = isGroup
     ? (formatGroupConversationLabel(activeConv) || t('group'))
     : (peer ? `@${peer.username}` : '');
@@ -237,42 +237,6 @@ export default function ChatHome() {
     if (!translationEnabled) setAutoTranslate(false);
   }, [translationEnabled]);
 
-  // Decrypt message bodies client-side for in-chat search (E2E — server never sees plaintext)
-  useEffect(() => {
-    if (!user?.user_id || messages.length === 0) return;
-    let cancelled = false;
-    (async () => {
-      const next = {};
-      for (const m of messages) {
-        try {
-          next[m.message_id] = await decryptMessageBody(m, {
-            myUserId: user.user_id,
-            peerUserId: peer?.user_id,
-            privateKey,
-          });
-        } catch {
-          /* skip undecryptable */
-        }
-      }
-      if (!cancelled) setDecryptedBodies(next);
-    })();
-    return () => { cancelled = true; };
-  }, [messages, privateKey, user?.user_id, peer?.user_id]);
-
-  const filteredMessages = useMemo(() => {
-    const q = messageFilter.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter((m) => {
-      if (m.sender_id === user?.user_id && user?.username?.toLowerCase().includes(q)) return true;
-      if (isGroup && activeConv?.members) {
-        const sender = activeConv.members.find((mem) => mem.user_id === m.sender_id);
-        if (sender?.username?.toLowerCase().includes(q)) return true;
-      } else if (m.sender_id !== user?.user_id && peer?.username?.toLowerCase().includes(q)) return true;
-      const body = decryptedBodies[m.message_id];
-      return body && body.toLowerCase().includes(q);
-    });
-  }, [messages, messageFilter, decryptedBodies, user, peer, isGroup, activeConv]);
-
   // Build recipients map for outgoing message encryption
   const recipientsForActive = useMemo(() => {
     if (!activeConv || !user) return {};
@@ -288,32 +252,87 @@ export default function ChatHome() {
     return map;
   }, [activeConv, user, peer, isGroup]);
 
-  // ─── Load conversations ────
-  const loadConversations = useCallback(async () => {
-    try {
-      const { data } = await api.get('/conversations');
-      setConversations(data);
-    } catch {
-      /* ignore */
-    } finally {
-      setConversationsLoading(false);
-    }
-  }, []);
-  const goToConversation = useCallback((id) => {
-    setActiveId(id);
-    if (id) {
-      navigate(chatThreadPath(id), chatNavigateOptions(id));
-    } else {
-      navigate(chatListPath(), chatNavigateOptions(null));
-    }
-  }, [navigate]);
+  const {
+    sendMessage,
+    attachFile,
+    startRecording,
+    cancelRecording,
+    stopRecordingAndSend,
+  } = useMessagingSend({
+    activeConv,
+    activeId,
+    isGroup,
+    peer,
+    user,
+    privateKey,
+    myContacts,
+    canMessagePeer,
+    isRequestPendingPeer,
+    recipientsForActive,
+    refreshUser,
+    setDraft,
+    setUploadBusy,
+    uploadBusy,
+    t,
+  });
 
-  const leaveChat = useCallback(() => {
-    setChatMenuOpen(false);
-    setMobileMsgSearchOpen(false);
-    setMessageFilter('');
-    goToConversation(null);
-  }, [goToConversation]);
+  const {
+    startCall,
+    acceptCall,
+    rejectCall,
+    rejectGroupCall,
+    acceptGroupCall,
+  } = useChatCalls({
+    isGroup,
+    peer,
+    activeConv,
+    activeId,
+    user,
+    myContacts,
+    callState,
+    setCallState,
+    groupCallState,
+    setGroupCallState,
+    socketRef,
+    refreshUser,
+    t,
+  });
+
+  const {
+    isRecording,
+    onVoicePointerDown,
+    onVoicePointerUp,
+    onVoicePointerCancel,
+    onVoiceClick,
+  } = useHoldToRecord({
+    startRecording,
+    stopRecordingAndSend,
+    cancelRecording,
+  });
+
+  const onSendText = (e) => {
+    e?.preventDefault?.();
+    if (!draft.trim()) return;
+    sendMessage(draft.trim(), 'text');
+  };
+
+  useChatSocket({
+    user,
+    activeId,
+    peer,
+    t,
+    leaveChat,
+    loadConversations,
+    setMessages,
+    setTypingFrom,
+    setCallState,
+    setGroupCallState,
+    setReads,
+    socketRef,
+    conversationsRef,
+    myContactsRef,
+    refreshContactsRosterRef,
+  });
 
   useEffect(() => {
     setActiveId(conversationId || null);
@@ -398,6 +417,8 @@ export default function ChatHome() {
     storyGroup,
     callState,
     groupCallState,
+    rejectCall,
+    rejectGroupCall,
   ]);
 
   const hasIncomingCall = (callState?.direction === 'incoming')
@@ -417,9 +438,19 @@ export default function ChatHome() {
   }, [hasIncomingCall]);
 
   const handlePendingCall = useCallback(async (payload) => {
-    const data = payload?.data || payload;
-    if (!data?.from) return;
+    const raw = payload?.data || payload;
+    if (!raw?.from) return;
     try {
+      const resolved = await resolveIncomingSignaling(raw, {
+        myUserId: user?.user_id,
+        peerUserId: raw.from,
+      });
+      if (!resolved.ok && resolved.encrypted) {
+        toast.error(t('callSignalingDecryptFailed'));
+        return;
+      }
+      const data = resolved.ok ? resolved.signal : raw;
+
       const { data: peerData } = await api.get(`/users/${data.from}/public`);
       const mode = data.mode || 'audio';
       if (data.conversation_id) goToConversation(data.conversation_id);
@@ -434,7 +465,13 @@ export default function ChatHome() {
           mode,
           direction: payload?.action === 'answer' ? 'incoming-accepted' : 'incoming',
           members,
-          signal: { from: data.from, from_username: peerData.username, sdp: data.sdp, members: data.members },
+          conversationId: data.conversation_id || null,
+          signal: {
+            from: data.from,
+            from_username: peerData.username,
+            sdp: data.sdp,
+            members: data.members,
+          },
         });
       } else {
         setCallState({
@@ -444,8 +481,11 @@ export default function ChatHome() {
           signal: data.sdp ? { sdp: data.sdp } : null,
         });
       }
-    } catch {}
-  }, [goToConversation, user?.user_id]);
+    } catch (err) {
+      console.error('[SSC] pending call handling failed:', err?.message || err);
+      toast.error(t('callIncomingFailed'));
+    }
+  }, [goToConversation, user?.user_id, socketRef, t]);
 
   useEffect(() => {
     const onCallEnded = () => {
@@ -458,15 +498,6 @@ export default function ChatHome() {
   }, []);
 
   useEffect(() => {
-    if (!user?.user_id || !activeId || !activeConv) return;
-    (async () => {
-      if (!isGroup && peer?.user_id) {
-        await ensureSignalSession(peer.user_id, user.user_id).catch(() => {});
-      }
-    })();
-  }, [user?.user_id, activeId, activeConv, isGroup, peer?.user_id]);
-
-  useEffect(() => {
     const raw = sessionStorage.getItem(PENDING_CALL_KEY);
     if (raw) {
       sessionStorage.removeItem(PENDING_CALL_KEY);
@@ -476,153 +507,6 @@ export default function ChatHome() {
     window.addEventListener('ssc-call-notification', h);
     return () => window.removeEventListener('ssc-call-notification', h);
   }, [handlePendingCall]);
-
-  const loadMyContacts = useCallback(async () => {
-    try {
-      const { data } = await api.get('/contacts');
-      setMyContacts(data);
-    } catch {}
-  }, []);
-
-  const loadPendingRequests = useCallback(async () => {
-    try {
-      const { data } = await api.get('/contacts/requests');
-      setPendingRequests(data);
-    } catch {}
-    try {
-      const { data } = await api.get('/contacts/requests/sent');
-      setOutgoingRequests(data);
-    } catch {}
-  }, []);
-
-  const refreshContactsRoster = useCallback(async ({ full = false } = {}) => {
-    await loadPendingRequests();
-    if (full) {
-      await loadMyContacts();
-      await loadConversations();
-    }
-  }, [loadConversations, loadMyContacts, loadPendingRequests]);
-
-  useEffect(() => {
-    refreshContactsRosterRef.current = refreshContactsRoster;
-  }, [refreshContactsRoster]);
-
-  useEffect(() => {
-    if (!user?.user_id) return;
-    refreshContactsRoster({ full: true });
-  }, [user?.user_id, refreshContactsRoster]);
-
-  useEffect(() => {
-    if (!user?.user_id) return undefined;
-    return subscribeContactsRefresh((detail) => {
-      const full = detail?.type === 'friend_accept' || detail?.full;
-      refreshContactsRosterRef.current?.({ full });
-    });
-  }, [user?.user_id]);
-
-  const sendFriendRequest = async (u) => {
-    await api.post('/contacts/request', { username: u.username });
-    toast.success(`Friend request sent to @${u.username}`);
-    await loadPendingRequests();
-  };
-
-  const acceptRequest = async (reqId) => {
-    try {
-      await api.post('/contacts/requests/accept', { request_id: reqId });
-      toast.success('Request accepted');
-      await loadPendingRequests();
-      await loadMyContacts();
-      await loadConversations();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Failed');
-    }
-  };
-
-  const rejectRequest = async (reqId) => {
-    try {
-      await api.post('/contacts/requests/reject', { request_id: reqId });
-      toast.success('Request rejected');
-      await loadPendingRequests();
-    } catch (e) {
-      toast.error('Failed');
-    }
-  };
-
-  const toggleBlock = async (uid) => {
-    const c = myContacts.find((x) => x.user_id === uid);
-    if (!c) return;
-    const wasBlocked = c.blocked;
-    try {
-      if (wasBlocked) {
-        await api.post(`/contacts/${uid}/unblock`);
-      } else {
-        await api.post(`/contacts/${uid}/block`);
-      }
-      await loadMyContacts();
-      await loadConversations();
-      toast.success(wasBlocked ? t('contactUnblocked') : t('contactBlocked'));
-      if (!wasBlocked && peer?.user_id === uid) {
-        leaveChat();
-      }
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
-    }
-  };
-
-  const toggleMute = async (uid) => {
-    const c = myContacts.find((x) => x.user_id === uid);
-    if (!c) return;
-    const wasMuted = c.muted;
-    try {
-      if (wasMuted) {
-        await api.post(`/contacts/${uid}/unmute`);
-      } else {
-        await api.post(`/contacts/${uid}/mute`);
-      }
-      await loadMyContacts();
-      toast.success(wasMuted ? t('contactUnmuted') : t('contactMuted'));
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
-    }
-  };
-
-  const removeContact = (uid) => {
-    setConfirmRemoveUid(uid);
-  };
-
-  const deleteConversation = async (conv) => {
-    if (!conv?.conversation_id) return;
-    try {
-      if (conv.is_group) {
-        await api.delete(`/conversations/${conv.conversation_id}/members/${user?.user_id}`);
-      } else {
-        await api.delete(`/conversations/${conv.conversation_id}`);
-      }
-      await loadConversations();
-      if (activeId === conv.conversation_id) leaveChat();
-      toast.success(conv.is_group ? t('leftGroup') : t('chatDeleted'));
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || t('couldNotDeleteChat'));
-    }
-  };
-
-  const refreshActiveGroup = useCallback(async () => {
-    await loadConversations();
-  }, [loadConversations]);
-
-  const confirmRemoveContact = async () => {
-    const uid = confirmRemoveUid;
-    if (!uid) return;
-    setConfirmRemoveUid(null);
-    try {
-      await api.delete(`/contacts/${uid}`);
-      await loadMyContacts();
-      await loadConversations();
-      toast.success(t('contactRemoved'));
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || t('couldNotUpdateContact'));
-    }
-  };
 
   useEffect(() => {
     if (!user?.user_id) return;
@@ -636,14 +520,6 @@ export default function ChatHome() {
       setOnboardingOpen(false);
     }
   }, [activeId, onboardingOpen]);
-
-  useEffect(() => {
-    if (!user?.user_id || !isInstalledClient()) return;
-    (async () => {
-      await bootstrapSignalIdentity(refreshUser).catch(() => {});
-      await refreshUser();
-    })();
-  }, [user?.user_id, refreshUser]);
 
   const pushRegisteredRef = useRef(false);
 
@@ -670,185 +546,6 @@ export default function ChatHome() {
       }
     });
   }, [user?.user_id, goToConversation, navigate]);
-
-  // ─── Socket ───
-  useEffect(() => {
-    if (!user) return;
-    const s = new ChatSocket(getSessionToken(), {
-      onMessage: (data) => {
-        if (data.type === 'message') {
-          const incoming = data.data;
-          if (incoming?.message_type === SKDM_MESSAGE_TYPE) {
-            processIncomingSkdmMessage(incoming, {
-              myUserId: user.user_id,
-              peerUserId: peer?.user_id,
-            }).catch(() => {});
-          } else if (incoming?.message_type === STATUS_SKDM_MESSAGE_TYPE) {
-            processIncomingStatusSkdmMessage(incoming, {
-              myUserId: user.user_id,
-              peerUserId: incoming.sender_id !== user.user_id ? incoming.sender_id : peer?.user_id,
-            }).catch(() => {});
-          } else if (incoming.conversation_id === activeId) {
-            setMessages((m) => [...m, incoming]);
-          }
-          loadConversations();
-          maybeNotifyDesktopMessage(incoming, {
-            myUserId: user.user_id,
-            activeId,
-            conversations: conversationsRef.current,
-            myContacts: myContactsRef.current,
-            formatGroupLabel: formatGroupConversationLabel,
-            isPeerMutedFn: isPeerMuted,
-          }).catch(() => {});
-        } else if (data.type === 'typing') {
-          if (data.conversation_id === activeId && data.user_id !== user?.user_id) {
-            setTypingFrom(data.username);
-            setTimeout(() => setTypingFrom(null), 2500);
-          }
-        } else if (data.type === 'call-offer') {
-          // incoming call
-          (async () => {
-            let offer = data;
-            if (user?.user_id) {
-              try {
-                if (data.from) {
-                  await ensureSignalSession(data.from, user.user_id).catch(() => {});
-                }
-                offer = await unpackIncomingSignaling(data, {
-                  myUserId: user.user_id,
-                  peerUserId: data.from,
-                });
-              } catch {
-                if (data.sdp != null || data.candidate != null) {
-                  offer = data;
-                } else {
-                  return;
-                }
-              }
-            }
-            const { data: peerData } = await api.get(`/users/${offer.from}/public`);
-            if (offer.group) {
-              // Group call: offer carries members list
-              const members = (offer.members || []).filter((m) => m.user_id !== user?.user_id);
-              if (members.length === 0) members.push({ user_id: offer.from, username: peerData.username });
-              setGroupCallState({ mode: offer.mode, direction: 'incoming', members, signal: { from: offer.from, from_username: peerData.username, sdp: offer.sdp, members } });
-            } else {
-              setCallState({ mode: offer.mode, direction: 'incoming', peer: peerData, signal: { sdp: offer.sdp } });
-            }
-            notifyDesktopIncomingCall({
-              fromUsername: peerData.username,
-              mode: offer.mode,
-              group: !!offer.group,
-              conversationId: offer.conversation_id || null,
-            }).catch(() => {});
-          })();
-        } else if (data.type === 'read') {
-          // read receipt from another user
-          if (data.conversation_id === activeId) {
-            setReads((cur) => {
-              const others = cur.filter((r) => r.user_id !== data.user_id);
-              return [...others, { user_id: data.user_id, last_read_message_id: data.last_read_message_id }];
-            });
-          }
-        } else if (data.type === 'conversation-created' || data.type === 'conversation-updated') {
-          loadConversations();
-        } else if (data.type === 'conversation-deleted') {
-          loadConversations();
-          if (data.data?.conversation_id === activeId) leaveChat();
-        } else if (data.type === 'status-new') {
-          window.dispatchEvent(new Event('ssc-status-new'));
-        } else if (isContactRealtimeEvent(data)) {
-          const full = data.type === 'friend-accepted' || data.type === 'contacts-changed';
-          refreshContactsRosterRef.current?.({ full });
-          if (data.type === 'friend-request' && data.from_username) {
-            toast.message(t('friendRequestIncoming', { user: data.from_username }));
-            notifyDesktopFriendRequest(data.from_username).catch(() => {});
-          } else if (data.type === 'friend-accepted' && data.contact_username) {
-            toast.success(t('friendRequestAcceptedBy', { user: data.contact_username }));
-          }
-        } else if (['call-answer', 'ice-candidate', 'call-end', 'call-reject'].includes(data.type)) {
-          (async () => {
-            let signal = data;
-            if (user?.user_id && data.type !== 'call-end' && data.type !== 'call-reject') {
-              try {
-                signal = await unpackIncomingSignaling(data, {
-                  myUserId: user.user_id,
-                  peerUserId: data.from,
-                });
-              } catch {
-                return;
-              }
-            }
-            window.dispatchEvent(new CustomEvent('ssc-signal', { detail: signal }));
-            if (signal.type === 'call-end' || signal.type === 'call-reject') {
-              stopIncomingRingtone();
-              setCallState(null);
-              setGroupCallState(null);
-            }
-          })();
-        }
-      },
-    });
-    s.connect();
-    socketRef.current = s;
-    return () => s.close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, user?.user_id]);
-
-  // ─── Load messages on active change ───
-  useEffect(() => {
-    if (!activeId) { setMessages([]); setReads([]); setMessagesLoading(false); return; }
-    setMessagesLoading(true);
-    (async () => {
-      try {
-        const { data } = await api.get(`/conversations/${activeId}/messages`);
-        const visible = [];
-        for (const msg of data) {
-          if (msg?.message_type === SKDM_MESSAGE_TYPE) {
-            processIncomingSkdmMessage(msg, {
-              myUserId: user?.user_id,
-              peerUserId: peer?.user_id,
-            }).catch(() => {});
-          } else if (msg?.message_type === STATUS_SKDM_MESSAGE_TYPE) {
-            processIncomingStatusSkdmMessage(msg, {
-              myUserId: user?.user_id,
-              peerUserId: msg.sender_id !== user?.user_id ? msg.sender_id : peer?.user_id,
-            }).catch(() => {});
-          } else {
-            visible.push(msg);
-          }
-        }
-        setMessages(visible);
-        const { data: rs } = await api.get(`/conversations/${activeId}/reads`);
-        setReads(rs);
-        // mark as read
-        try { await api.post('/messages/read', { conversation_id: activeId }); } catch {}
-      } catch {}
-      finally { setMessagesLoading(false); }
-    })();
-  }, [activeId, user?.user_id, peer?.user_id]);
-
-  // Engine 8.4 — establish X3DH session when opening a 1:1 chat (Android native)
-  useEffect(() => {
-    if (!activeId || isGroup || !peer?.user_id) return;
-    ensureSignalSession(peer.user_id, user?.user_id).catch(() => {});
-  }, [activeId, isGroup, peer?.user_id, user?.user_id]);
-
-  // Mark new incoming messages as read when the chat is open
-  useEffect(() => {
-    if (!activeId || messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.sender_id !== user?.user_id) {
-      api.post('/messages/read', { conversation_id: activeId, up_to_message_id: last.message_id }).catch(() => {});
-    }
-  }, [messages, activeId, user]);
-
-  const onMessagesScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userNearBottomRef.current = dist < 80;
-  };
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -881,9 +578,7 @@ export default function ChatHome() {
       const detail = e?.response?.data?.detail || '';
       if (detail.includes('contacts') || detail.includes('mutual')) {
         try {
-          await api.post('/contacts/request', { username: u.username });
-          toast.success(`Friend request sent to @${u.username}`);
-          await loadPendingRequests();
+          await sendFriendRequest(u);
           setSearchOpen(false);
           setSearchQ('');
         } catch (reqErr) {
@@ -895,233 +590,13 @@ export default function ChatHome() {
     }
   };
 
-  // ─── Send message ───
-  const sendMessage = async (text, type = 'text', attachmentId = null, attachmentEnc = null) => {
-    if (!activeConv) return;
-    if (!text && !attachmentId) return;
-    if (!isGroup && peer && isPeerBlocked(peer.user_id, myContacts)) {
-      toast.error(t('cannotMessageBlocked'));
-      return;
-    }
-    if (!canMessagePeer) {
-      toast.info(isRequestPendingPeer ? t('requestPendingChat') : t('cannotMessageNonMutual'));
-      return;
-    }
-    try {
-      const useSignal = await prepareInstalledMessaging({
-        isGroup,
-        peer,
-        user,
-        members: activeConv?.members || [],
-        refreshUser,
-      });
-
-      if (usesSignalOnlyMessaging() && !useSignal) {
-        toast.error(t('encryptionNotReady'));
-        return;
-      }
-
-      if (useSignal && isGroup) {
-        await ensureGroupSenderKeysDistributed({
-          conversationId: activeId,
-          members: activeConv.members || [],
-          ourUserId: user.user_id,
-        });
-        let enc;
-        if (attachmentId && attachmentEnc?.signal_meta) {
-          const { buildSignalAttachmentEnvelope } = await import('../lib/signal/attachments');
-          enc = await encryptGroupText(
-            activeId,
-            user.user_id,
-            buildSignalAttachmentEnvelope(attachmentEnc.signal_meta),
-          );
-        } else {
-          enc = await encryptGroupText(activeId, user.user_id, text || '');
-        }
-        await api.post('/messages', {
-          conversation_id: activeId,
-          protocol: ProtocolVersion.SIGNAL_GROUP_V1,
-          ciphertext: enc.ciphertext,
-          signal_message_type: enc.signal_message_type,
-          distribution_id: enc.distribution_id,
-          message_type: type,
-          attachment_id: attachmentId || undefined,
-          attachment_content_type: attachmentEnc?.content_type,
-        });
-        setDraft('');
-        return;
-      }
-
-      if (useSignal && !isGroup) {
-        let enc;
-        if (attachmentId && attachmentEnc?.signal_meta) {
-          enc = await encryptSignalAttachment(peer.user_id, user.user_id, attachmentEnc.signal_meta);
-        } else {
-          enc = await encryptSignalText(peer.user_id, user.user_id, text || '');
-        }
-        await api.post('/messages', {
-          conversation_id: activeId,
-          protocol: ProtocolVersion.SIGNAL_V1,
-          ciphertext: enc.ciphertext,
-          signal_message_type: enc.signal_message_type,
-          message_type: type,
-          attachment_id: attachmentId || undefined,
-          attachment_content_type: attachmentEnc?.content_type,
-        });
-        setDraft('');
-        return;
-      }
-
-      if (!maySendLegacyRsa()) {
-        toast.error(t('encryptionNotReady'));
-        return;
-      }
-      if (!privateKey) {
-        toast.error(t('encryptionNotReady'));
-        return;
-      }
-      const recipients = recipientsForActive;
-      if (Object.keys(recipients).length < 2) {
-        toast.error('No recipients have encryption keys yet');
-        return;
-      }
-      const enc = await encryptMessageForRecipients(text || '', recipients);
-      await api.post('/messages', {
-        conversation_id: activeId,
-        protocol: ProtocolVersion.LEGACY_RSA,
-        ciphertext: enc.ciphertext, iv: enc.iv, encrypted_keys: enc.encrypted_keys,
-        message_type: type, attachment_id: attachmentId,
-        attachment_iv: attachmentEnc?.iv,
-        attachment_encrypted_keys: attachmentEnc?.encrypted_keys,
-        attachment_content_type: attachmentEnc?.content_type,
-      });
-      setDraft('');
-    } catch (e) {
-      console.error(e);
-      const detail = e?.response?.data?.detail;
-      if (detail) {
-        toast.error(detail);
-      } else if (usesSignalOnlyMessaging()) {
-        toast.error(t('encryptionNotReady'));
-      } else {
-        toast.error(t('sendFailed'));
-      }
-    }
-  };
-
-  const uploadEncryptedAttachment = async (blob, filename, mimeType) => {
-    const raw = await blob.arrayBuffer();
-    const useSignal = await prepareInstalledMessaging({
-      isGroup,
-      peer,
-      user,
-      members: activeConv?.members || [],
-      refreshUser,
-    });
-    if (usesSignalOnlyMessaging() && !useSignal) {
-      throw new Error('encryption_not_ready');
-    }
-
-    let enc;
-    if (useSignal) {
-      enc = await encryptAttachmentBytes(raw);
-    } else {
-      const recipients = recipientsForActive;
-      if (Object.keys(recipients).length < 2) {
-        throw new Error('No recipients have encryption keys yet');
-      }
-      enc = await encryptBytesForRecipients(raw, recipients);
-    }
-
-    const cipherBlob = new Blob([b64ToBytes(enc.ciphertext)], { type: 'application/octet-stream' });
-    const form = new FormData();
-    form.append('file', cipherBlob, `${filename}.enc`);
-    form.append('encrypted', 'true');
-    if (mimeType) form.append('original_content_type', mimeType);
-    const { data } = await api.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
-    const contentType = mimeType || 'application/octet-stream';
-
-    if (useSignal) {
-      return {
-        fileId: data.file_id,
-        attachmentEnc: {
-          content_type: contentType,
-          signal_meta: {
-            file_id: data.file_id,
-            iv: enc.iv,
-            key: enc.key,
-            content_type: contentType,
-            caption: filename,
-          },
-        },
-      };
-    }
-
-    return {
-      fileId: data.file_id,
-      attachmentEnc: {
-        iv: enc.iv,
-        encrypted_keys: enc.encrypted_keys,
-        content_type: contentType,
-      },
-    };
-  };
-
-  const onSendText = (e) => {
-    e?.preventDefault?.();
-    if (!draft.trim()) return;
-    sendMessage(draft.trim(), 'text');
-  };
-
-  // ─── File upload ───
   const fileInputRef = useRef(null);
   const onPickFile = () => fileInputRef.current?.click();
-
-  const attachFile = async (file, { fromPaste = false } = {}) => {
-    if (!file || uploadBusy || !activeConv) return;
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error(t('fileTooLarge'));
-      return;
-    }
-    const canSend = await prepareInstalledMessaging({
-      isGroup,
-      peer,
-      user,
-      members: activeConv?.members || [],
-      refreshUser,
-    });
-    if (usesSignalOnlyMessaging() && !canSend) {
-      toast.error(t('encryptionNotReady'));
-      return;
-    }
-    if (!usesSignalOnlyMessaging() && !privateKey && !canSend) {
-      toast.error(t('encryptionNotReady'));
-      return;
-    }
-    setUploadBusy(true);
-    try {
-      const type = (file.type || '').startsWith('image/') ? 'image' : 'file';
-      const mime = file.type || (type === 'image' ? 'image/png' : 'application/octet-stream');
-      const name = file.name || (type === 'image' ? 'screenshot.png' : 'attachment');
-      const { fileId, attachmentEnc } = await uploadEncryptedAttachment(file, name, mime);
-      await sendMessage(name, type, fileId, attachmentEnc);
-      if (fromPaste && type === 'image') {
-        toast.success(t('pasteImageAttached'));
-      }
-    } catch (err) {
-      const status = err?.response?.status;
-      if (status === 413) toast.error(t('fileTooLarge'));
-      else if (err?.message?.includes('encryption keys')) toast.error(err.message);
-      else toast.error(err?.response?.data?.detail || t('uploadFailed'));
-    } finally {
-      setUploadBusy(false);
-    }
-  };
 
   const onFileChange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    await attachFile(file);
+    if (!uploadBusy) await attachFile(file);
   };
 
   const onComposerPaste = async (e) => {
@@ -1131,136 +606,16 @@ export default function ChatHome() {
       if (item.kind === 'file' && item.type?.startsWith('image/')) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) await attachFile(file, { fromPaste: true });
+        if (file && !uploadBusy) await attachFile(file, { fromPaste: true });
         return;
       }
     }
   };
 
-  // ─── Calls ───
-  const startCall = async (mode) => {
-    if (!isGroup && peer && isPeerBlocked(peer.user_id, myContacts)) {
-      toast.error(t('cannotMessageBlocked'));
-      return;
-    }
-    const ok = await ensureMediaPermissions(
-      { audio: true, video: mode === 'video' },
-      { t },
-    );
-    if (!ok) return;
-
-    if (isGroup && activeConv) {
-      const members = (activeConv.members || []).filter((m) => m.user_id !== user?.user_id);
-      if (members.length === 0) { toast.error('No members in this group'); return; }
-      const { validateGroupCallSize } = await import('../lib/groupCalls');
-      const capErr = await validateGroupCallSize(members.length);
-      if (capErr) { toast.error(capErr); return; }
-      setGroupCallState({ mode, direction: 'outgoing', members, signal: null });
-      return;
-    }
-    if (!peer) return;
-    setCallState({ mode, direction: 'outgoing', peer, signal: null });
-  };
-
-  const acceptCall = async () => {
-    if (!callState) return;
-    const ok = await ensureMediaPermissions(
-      { audio: true, video: callState.mode === 'video' },
-      { t },
-    );
-    if (!ok) return;
-    stopIncomingRingtone();
-    setCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s);
-  };
-  const rejectCall = () => {
-    if (!callState) return;
-    stopIncomingRingtone();
-    socketRef.current?.send({ type: 'call-reject', to: callState.peer.user_id });
-    setCallState(null);
-  };
-  const rejectGroupCall = () => {
-    if (!groupCallState) return;
-    stopIncomingRingtone();
-    const from = groupCallState.signal?.from;
-    if (from) {
-      socketRef.current?.send({ type: 'call-reject', to: from, group: true });
-    }
-    setGroupCallState(null);
-  };
-
-  const acceptGroupCall = async () => {
-    if (!groupCallState) return;
-    const ok = await ensureMediaPermissions(
-      { audio: true, video: groupCallState.mode === 'video' },
-      { t },
-    );
-    if (!ok) return;
-    stopIncomingRingtone();
-    setGroupCallState((s) => s ? { ...s, direction: 'incoming-accepted' } : s);
-  };
-
-  // ─── Typing ───
   const onDraftChange = (v) => {
     setDraft(v);
     if (activeId && socketRef.current) {
       socketRef.current.send({ type: 'typing', conversation_id: activeId });
-    }
-  };
-
-  const startRecording = async () => {
-    if (voiceRecordingRef.current) return;
-    const ok = await ensureMediaPermissions({ audio: true, video: false }, { t });
-    if (!ok) return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const session = startVoiceRecording(stream);
-      voiceRecordingRef.current = session;
-      setIsRecording(true);
-      setTimeout(() => { if (voiceRecordingRef.current === session) stopRecording(); }, 30000);
-    } catch (e) {
-      toast.error(t('micPermissionDenied'));
-    }
-  };
-
-  const stopRecording = async () => {
-    const session = voiceRecordingRef.current;
-    if (!session) return;
-    voiceRecordingRef.current = null;
-    session.stop();
-    setIsRecording(false);
-    try {
-      const { blob, mimeType } = await session.done;
-      if (blob.size < MIN_VOICE_BLOB_BYTES) {
-        toast.error(t('voiceNoteTooShort'));
-        return;
-      }
-      const canSend = await prepareInstalledMessaging({
-        isGroup,
-        peer,
-        user,
-        members: activeConv?.members || [],
-        refreshUser,
-      });
-      if (usesSignalOnlyMessaging() && !canSend) {
-        toast.error(t('encryptionNotReady'));
-        return;
-      }
-      if (!usesSignalOnlyMessaging() && !privateKey && !canSend) {
-        toast.error(t('encryptionNotReady'));
-        return;
-      }
-      setUploadBusy(true);
-      try {
-        const filename = voiceFilenameForMime(mimeType);
-        const { fileId, attachmentEnc } = await uploadEncryptedAttachment(blob, filename, mimeType);
-        await sendMessage('', 'voice', fileId, attachmentEnc);
-      } catch (e) {
-        toast.error(t('voiceNoteFailed'));
-      } finally {
-        setUploadBusy(false);
-      }
-    } catch (e) {
-      toast.error(t('voiceNoteFailed'));
     }
   };
 
@@ -1545,7 +900,7 @@ export default function ChatHome() {
               </div>
             )}
 
-            <div ref={scrollRef} onScroll={onMessagesScroll} className="chat-scroll px-3 md:px-6 py-3 flex flex-col gap-3">
+            <div ref={scrollRef} onScroll={() => onMessagesScroll(scrollRef)} className="chat-scroll px-3 md:px-6 py-3 flex flex-col gap-3">
               <div className="hidden md:block px-3 py-1">
                 <input value={messageFilter} onChange={(e) => setMessageFilter(e.target.value)} placeholder={t('searchMessages')} className="w-full text-xs bg-transparent border-0 border-b border-[#27272A] pb-1" data-testid="message-filter" />
               </div>
@@ -1592,8 +947,18 @@ export default function ChatHome() {
                 title={uploadBusy ? t('uploadInProgress') : undefined}>
                 <Paperclip size={18} />
               </button>
-              <button type="button" onClick={isRecording ? stopRecording : startRecording} data-testid="voice-button" disabled={!canMessagePeer}
-                className={`w-11 h-11 rounded-md tac-border flex items-center justify-center shrink-0 ${isRecording ? 'bg-[#FF3B30] text-white' : 'bg-[#121212] active:bg-[#1A1A1A]'}`}>
+              <button
+                type="button"
+                onClick={onVoiceClick}
+                onPointerDown={onVoicePointerDown}
+                onPointerUp={onVoicePointerUp}
+                onPointerCancel={onVoicePointerCancel}
+                onContextMenu={(e) => e.preventDefault()}
+                data-testid="voice-button"
+                disabled={!canMessagePeer}
+                title={t('voiceHoldToRecord')}
+                className={`w-11 h-11 rounded-md tac-border flex items-center justify-center shrink-0 select-none touch-none ${isRecording ? 'bg-[#FF3B30] text-white' : 'bg-[#121212] active:bg-[#1A1A1A]'}`}
+              >
                 <Microphone size={18} />
               </button>
               <input
@@ -1851,7 +1216,7 @@ export default function ChatHome() {
         <GroupCallModal mode={groupCallState.mode}
           direction={groupCallState.direction === 'incoming-accepted' ? 'incoming' : 'outgoing'}
           members={groupCallState.members} me={user} user={user}
-          conversationId={activeId} socket={socketRef.current} signal={groupCallState.signal}
+          conversationId={groupCallState.conversationId || activeId} socket={socketRef.current} signal={groupCallState.signal}
           onClose={() => setGroupCallState(null)} />
       )}
     </div>

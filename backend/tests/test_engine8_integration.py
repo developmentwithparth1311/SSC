@@ -13,7 +13,7 @@ import requests
 import websockets
 
 from core.signal_policy import LIBSIGNAL_PINNED_VERSION, ProtocolVersion
-from test_helpers import auth_headers, make_mutual_contacts
+from test_helpers import auth_headers, make_mutual_contacts, ws_connect_url
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
@@ -204,8 +204,8 @@ def test_engine8_legacy_message_protocol_normalized():
 
 @pytest.mark.asyncio
 async def test_engine8_ws_legacy_call_offer_relay():
-    a_url = f"{WS_BASE}/api/ws?token={state['a_token']}"
-    b_url = f"{WS_BASE}/api/ws?token={state['b_token']}"
+    a_url = ws_connect_url(API, WS_BASE, state["a_token"])
+    b_url = ws_connect_url(API, WS_BASE, state["b_token"])
     bob_id = state["b_user"]["user_id"]
 
     async with websockets.connect(a_url) as a_ws, websockets.connect(b_url) as b_ws:
@@ -239,8 +239,8 @@ async def test_engine8_ws_legacy_call_offer_relay():
 
 @pytest.mark.asyncio
 async def test_engine8_ws_signal_v1_call_offer_opaque_relay():
-    a_url = f"{WS_BASE}/api/ws?token={state['a_token']}"
-    b_url = f"{WS_BASE}/api/ws?token={state['b_token']}"
+    a_url = ws_connect_url(API, WS_BASE, state["a_token"])
+    b_url = ws_connect_url(API, WS_BASE, state["b_token"])
     bob_id = state["b_user"]["user_id"]
 
     async with websockets.connect(a_url) as a_ws, websockets.connect(b_url) as b_ws:
@@ -277,8 +277,8 @@ async def test_engine8_ws_signal_v1_call_offer_opaque_relay():
 
 @pytest.mark.asyncio
 async def test_engine8_ws_signal_v1_cleartext_leak_rejected():
-    a_url = f"{WS_BASE}/api/ws?token={state['a_token']}"
-    b_url = f"{WS_BASE}/api/ws?token={state['b_token']}"
+    a_url = ws_connect_url(API, WS_BASE, state["a_token"])
+    b_url = ws_connect_url(API, WS_BASE, state["b_token"])
     bob_id = state["b_user"]["user_id"]
 
     async with websockets.connect(a_url) as a_ws, websockets.connect(b_url) as b_ws:

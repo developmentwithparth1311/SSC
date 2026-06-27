@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core.auth import get_current_user
 from core.contact_helpers import are_contacts
+from core.contact_realtime import notify_signal_identity_changed
 from core.database import db
 from core.models import PrekeyBundleIn
 from core.prekey_bundle import (
@@ -44,11 +45,19 @@ async def upload_prekey_bundle(body: PrekeyBundleIn, current=Depends(get_current
     }
 
     existing = await db.signal_prekey_bundles.find_one({"user_id": current["user_id"]})
+    prior_identity = (existing or {}).get("identity_key_public") or current.get("signal_identity_key_public")
+    identity_rotated = bool(prior_identity and prior_identity != doc["identity_key_public"])
     if existing:
         record["created_at"] = existing.get("created_at", now)
         await db.signal_prekey_bundles.update_one({"user_id": current["user_id"]}, {"$set": record})
     else:
         await db.signal_prekey_bundles.insert_one(record)
+
+    if identity_rotated:
+        await notify_signal_identity_changed(
+            current["user_id"],
+            identity_key_public=doc["identity_key_public"],
+        )
 
     await db.users.update_one(
         {"user_id": current["user_id"]},

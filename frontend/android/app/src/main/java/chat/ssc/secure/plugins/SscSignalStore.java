@@ -251,6 +251,54 @@ public class SscSignalStore implements SenderKeyStore {
         return Base64.decode(data, Base64.NO_WRAP);
     }
 
+    /** Drop one peer session (and their sender keys) after remote identity rotation. */
+    public synchronized void deleteSessionForPeer(String peerUserId) throws JSONException {
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(sessionKey(peerUserId));
+        SignalProtocolAddress address = new SignalProtocolAddress(peerUserId, 1);
+        if (protocolStore.containsSession(address)) {
+            protocolStore.deleteSession(address);
+        }
+        Set<String> peers = new HashSet<>(prefs.getStringSet("session_peer_ids", new HashSet<>()));
+        peers.remove(peerUserId);
+        editor.putStringSet("session_peer_ids", peers);
+        List<String> senderKeys = new ArrayList<>();
+        String prefix = "sender_key_" + peerUserId + "_";
+        for (String key : prefs.getAll().keySet()) {
+            if (key.startsWith(prefix)) {
+                senderKeys.add(key);
+            }
+        }
+        for (String key : senderKeys) {
+            editor.remove(key);
+        }
+        editor.apply();
+    }
+
+    /** Clear ratchet sessions after identity rotation — keep local identity keys. */
+    public synchronized void clearAllSessions() throws JSONException {
+        Set<String> peerSet = new HashSet<>(prefs.getStringSet("session_peer_ids", new HashSet<>()));
+        SharedPreferences.Editor editor = prefs.edit();
+        for (String peerId : peerSet) {
+            editor.remove(sessionKey(peerId));
+            SignalProtocolAddress address = new SignalProtocolAddress(peerId, 1);
+            if (protocolStore.containsSession(address)) {
+                protocolStore.deleteSession(address);
+            }
+        }
+        editor.remove("session_peer_ids");
+        java.util.List<String> senderKeys = new ArrayList<>();
+        for (String key : prefs.getAll().keySet()) {
+            if (key.startsWith("sender_key_")) {
+                senderKeys.add(key);
+            }
+        }
+        for (String key : senderKeys) {
+            editor.remove(key);
+        }
+        editor.apply();
+    }
+
     /** Panic wipe — clear local Signal material so X3DH can rebuild cleanly. */
     public static synchronized void wipeAll(Context context) {
         context.getApplicationContext()

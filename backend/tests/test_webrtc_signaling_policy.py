@@ -1,5 +1,7 @@
 """Engine 8 Step 8.7 — WebRTC signaling policy tests."""
 import base64
+import uuid
+
 import pytest
 
 from core.webrtc_signaling_policy import (
@@ -69,6 +71,37 @@ def test_signal_v1_ice_candidate_ok():
         "signal_message_type": 3,
     })
     assert out["signal_message_type"] == 3
+
+
+def test_signal_v1_group_offer_ok():
+    dist_id = str(uuid.uuid4())
+    out = validate_signaling_relay({
+        "type": "call-offer",
+        "to": "u2",
+        "group": True,
+        "mode": "audio",
+        "signaling_protocol": "signal_v1",
+        "signaling_ciphertext": _VALID_CT,
+        "signal_message_type": 7,
+        "distribution_id": dist_id,
+    })
+    assert out["signaling_protocol"] == SignalingProtocol.SIGNAL_V1.value
+    assert out["signal_message_type"] == 7
+    assert out["distribution_id"] == dist_id
+    assert out["sdp"] is None
+
+
+def test_signal_v1_group_rejects_1to1_message_types():
+    with pytest.raises(SignalingValidationError):
+        validate_signaling_relay({
+            "type": "call-offer",
+            "to": "u2",
+            "group": True,
+            "signaling_protocol": "signal_v1",
+            "signaling_ciphertext": _VALID_CT,
+            "signal_message_type": 2,
+            "distribution_id": str(uuid.uuid4()),
+        })
 
 
 def test_group_call_allows_legacy_cleartext():

@@ -1,8 +1,17 @@
 import { api } from '../api';
 import { LIBSIGNAL_PINNED_VERSION } from './constants';
-import { generatePreKeyBundle, isNativeLibsignalAvailable } from './nativeLibsignal';
+import {
+  clearAllSignalSessions,
+  generatePreKeyBundle,
+  isNativeLibsignalAvailable,
+} from './nativeLibsignal';
 
 let uploadPromise = null;
+
+/** @internal test-only */
+export function __resetPrekeysUploadStateForTests() {
+  uploadPromise = null;
+}
 
 export async function uploadPreKeyBundle(bundle) {
   const payload = {
@@ -27,6 +36,12 @@ export async function fetchMyPreKeyStatus() {
   return data;
 }
 
+function identityMismatch(serverStatus, localBundle) {
+  if (!serverStatus?.ready || !serverStatus?.identity_key_public) return false;
+  if (!localBundle?.identity_key_public) return true;
+  return serverStatus.identity_key_public !== localBundle.identity_key_public;
+}
+
 export async function ensurePreKeysUploaded() {
   if (!isNativeLibsignalAvailable()) {
     return { skipped: true, reason: 'web' };
@@ -36,12 +51,30 @@ export async function ensurePreKeysUploaded() {
   uploadPromise = (async () => {
     try {
       const status = await fetchMyPreKeyStatus();
-      if (status?.ready) {
+      const localBundle = await generatePreKeyBundle();
+      const mismatch = identityMismatch(status, localBundle);
+
+      if (status?.ready && !mismatch) {
         return { uploaded: false, already: true };
       }
-      const bundle = await generatePreKeyBundle();
+
+      if (mismatch) {
+        const clearResult = await clearAllSignalSessions();
+        if (clearResult?.cleared !== true) {
+          const detail = clearResult?.reason || 'clear_failed';
+          console.error('[SSC] clearAllSignalSessions failed after identity mismatch:', detail);
+          throw new Error(`session_clear_failed:${detail}`);
+        }
+        console.info('[SSC] Local Signal identity differs from server — re-uploading prekeys');
+      }
+
+      const bundle = mismatch ? await generatePreKeyBundle() : localBundle;
       const result = await uploadPreKeyBundle(bundle);
-      return { uploaded: true, result };
+      return {
+        uploaded: true,
+        result,
+        identity_rotated: mismatch,
+      };
     } finally {
       uploadPromise = null;
     }

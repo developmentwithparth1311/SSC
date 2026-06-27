@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, CameraRotate } from '@phosphor-icons/react';
 import { useLocale } from '../context/LocaleContext';
+import { toastSignalingFailure } from '../chat/signalingErrors';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 import {
   acquireLocalMediaStream,
@@ -67,7 +68,14 @@ export default function GroupCallModal({
 
   const relaySignaling = async (msg) => {
     if (!socket) return;
-    await sendSignaling(socket, { ...msg, group: true }, signalingCtx);
+    try {
+      await sendSignaling(socket, { ...msg, group: true }, signalingCtx);
+    } catch (err) {
+      if (toastSignalingFailure(err, t)) {
+        onClose?.();
+      }
+      throw err;
+    }
   };
 
   useEffect(() => {
@@ -168,7 +176,9 @@ export default function GroupCallModal({
           myUserId: me?.user_id,
           peerUserId: data.from,
         });
-      } catch {
+      } catch (err) {
+        console.warn('[SSC] group call signaling unpack failed:', err?.message || err);
+        toast.error(t('callSignalingDecryptFailed'));
         return;
       }
       const fromId = data.from;
@@ -185,12 +195,22 @@ export default function GroupCallModal({
       } else if (data.type === 'call-answer') {
         const entry = peersRef.current[fromId];
         if (entry) {
-          try { await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); } catch {}
+          try {
+            await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          } catch (err) {
+            console.warn('[SSC] group call answer SDP failed:', err?.message || err);
+            toast.error(t('callSdpFailed'));
+          }
         }
       } else if (data.type === 'ice-candidate') {
         const entry = peersRef.current[fromId];
         if (entry) {
-          try { await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+          try {
+            await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } catch (err) {
+            console.warn('[SSC] group call ICE candidate failed:', err?.message || err);
+            toast.error(t('callIceFailed'));
+          }
         }
       } else if (data.type === 'call-end') {
         const entry = peersRef.current[fromId];

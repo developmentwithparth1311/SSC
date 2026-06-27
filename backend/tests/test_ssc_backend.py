@@ -9,11 +9,11 @@ import pytest
 import requests
 import websockets
 
-from test_helpers import make_mutual_contacts
+from test_helpers import make_mutual_contacts, ws_connect_url
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
-WS_URL = BASE_URL.replace("https://", "wss://").replace("http://", "ws://") + "/api/ws"
+WS_BASE = BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
 
 
 # Unique suffix to avoid collision on re-runs
@@ -321,8 +321,8 @@ async def test_websocket_ping_pong_and_typing():
     b_token = state["bob_token"]
     conv_id = state["conv_id"]
 
-    a_url = f"{WS_URL}?token={a_token}"
-    b_url = f"{WS_URL}?token={b_token}"
+    a_url = ws_connect_url(API, WS_BASE, a_token)
+    b_url = ws_connect_url(API, WS_BASE, b_token)
 
     async with websockets.connect(a_url) as a_ws, websockets.connect(b_url) as b_ws:
         # consume "connected" greeting

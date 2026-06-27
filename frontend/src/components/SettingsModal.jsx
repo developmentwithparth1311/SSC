@@ -25,10 +25,11 @@ import {
   areDesktopNotificationsEnabled,
   setDesktopNotificationsEnabled,
 } from '../lib/desktopNotifications';
+import { collectEncryptionDiagnostics } from '../chat/encryptionDiagnostics';
 import { unwrapPrivateKey, wrapPrivateKey } from '../lib/crypto';
 import { saveVaultCredential } from '../lib/vaultCredentialStore';
 
-const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.10';
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.11';
 
 function platformLabel(t) {
   if (isNativeApp()) return t('settingsPlatformAndroid');
@@ -73,6 +74,7 @@ export default function SettingsModal({ open, onClose }) {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [encryptionDiag, setEncryptionDiag] = useState(null);
   const avatarInputRef = useRef(null);
 
   const canChangePassword = user?.auth_provider === 'password';
@@ -95,6 +97,16 @@ export default function SettingsModal({ open, onClose }) {
     })();
     return () => { cancelled = true; };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !isInstalledClient() || !user) return undefined;
+    let cancelled = false;
+    (async () => {
+      const diag = await collectEncryptionDiagnostics({ user });
+      if (!cancelled) setEncryptionDiag(diag);
+    })();
+    return () => { cancelled = true; };
+  }, [open, user]);
 
   useEffect(() => {
     if (!open) return;
@@ -474,6 +486,23 @@ export default function SettingsModal({ open, onClose }) {
                 </ul>
               )}
             </Section>
+
+            {isInstalledClient() && encryptionDiag && (
+              <Section icon={ShieldCheck} title={t('settingsEncryptionDiag')} testId="settings-encryption-diag">
+                <ul className="text-[10px] font-mono text-[#A1A1AA] space-y-1">
+                  <li>{t('settingsEncryptionLibsignal')}: {encryptionDiag.libsignal_available ? '✓' : '✗'}</li>
+                  {encryptionDiag.desktop_libsignal_init_error && (
+                    <li className="text-[#FF3B30]">{t('settingsEncryptionDesktopInit')}: {encryptionDiag.desktop_libsignal_init_error}</li>
+                  )}
+                  <li>{t('settingsEncryptionSelfPrekeys')}: {encryptionDiag.self_prekeys_ready ? '✓' : '✗'}</li>
+                  <li>{t('settingsEncryptionServerKeys')}: {encryptionDiag.server_identity_ready ? '✓' : '✗'}</li>
+                  <li>{t('settingsEncryptionIdentityMatch')}: {
+                    encryptionDiag.identity_matches_server === true ? '✓'
+                      : encryptionDiag.identity_matches_server === false ? '✗' : '—'
+                  }</li>
+                </ul>
+              </Section>
+            )}
 
             <Section icon={Bell} title={t('settingsNotifications')} testId="settings-notifications-section">
               {isElectronApp() ? (

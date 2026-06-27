@@ -13,6 +13,8 @@ const libsignalMethods = [
   'encryptGroupMessage',
   'decryptGroupMessage',
   'resetLocalStore',
+  'clearAllSessions',
+  'deleteSession',
 ];
 
 const libsignal = Object.fromEntries(
@@ -47,6 +49,7 @@ contextBridge.exposeInMainWorld('sscDesktop', {
   isDesktop: true,
   platform: process.platform,
   libsignal,
+  libsignalInitStatus: () => ipcRenderer.invoke('desktop-libsignal-status'),
   secureStorage,
   notifications,
   window: windowApi,

@@ -16,11 +16,12 @@ import pytest
 import requests
 import websockets
 
-from test_helpers import make_mutual_contacts
+from test_helpers import make_mutual_contacts, ws_connect_url
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
-WS_URL = BASE_URL.replace("https://", "wss://").replace("http://", "ws://") + "/api/ws"
+WS_BASE = BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
+WS_URL = f"{WS_BASE}/api/ws"
 
 SUFFIX = uuid.uuid4().hex[:4]
 CAPTCHA = "TEST-TOKEN"
@@ -309,7 +310,8 @@ async def test_statuses_ttl_index():
 async def test_ws_status_new_notification():
     a_token = state["a_token"]
     b_token = state["b_token"]
-    async with websockets.connect(f"{WS_URL}?token={b_token}") as b_ws:
+    b_url = ws_connect_url(API, WS_BASE, b_token)
+    async with websockets.connect(b_url) as b_ws:
         greet = await asyncio.wait_for(b_ws.recv(), timeout=5)
         assert json.loads(greet)["type"] == "connected"
 
@@ -355,8 +357,10 @@ async def test_ws_status_new_notification():
 async def test_ws_call_offer_group_passthrough():
     a_token = state["a_token"]
     b_token = state["b_token"]
-    async with websockets.connect(f"{WS_URL}?token={a_token}") as a_ws, \
-               websockets.connect(f"{WS_URL}?token={b_token}") as b_ws:
+    a_url = ws_connect_url(API, WS_BASE, a_token)
+    b_url = ws_connect_url(API, WS_BASE, b_token)
+    async with websockets.connect(a_url) as a_ws, \
+               websockets.connect(b_url) as b_ws:
         for ws in (a_ws, b_ws):
             greet = await asyncio.wait_for(ws.recv(), timeout=5)
             assert json.loads(greet)["type"] == "connected"

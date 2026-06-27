@@ -195,6 +195,19 @@ export const libsignalHandlers = {
     return { plaintext: new TextDecoder().decode(plain) };
   },
 
+  async deleteSession({ peer_user_id: peerUserId }) {
+    if (!peerUserId) throw new Error('peer_user_id required');
+    const s = requireStore();
+    s.deleteSession(peerUserId);
+    return { deleted: true };
+  },
+
+  async clearAllSessions() {
+    const s = requireStore();
+    s.clearAllSessions();
+    return { cleared: true };
+  },
+
   async resetLocalStore() {
     const s = requireStore();
     s.wipeAll();

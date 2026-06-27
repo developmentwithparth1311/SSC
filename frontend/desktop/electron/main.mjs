@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   safeStorage,
   Tray,
@@ -21,6 +22,7 @@ let pendingAuthUrl = null;
 let tray = null;
 let isQuitting = false;
 let notificationsAllowed = true;
+let libsignalInitError = null;
 
 function rendererIndex() {
   if (!app.isPackaged) {
@@ -182,13 +184,18 @@ app.whenReady().then(() => {
     const winUrl = process.argv.find((arg) => arg.startsWith(`${DESKTOP_AUTH_SCHEME}://`));
     if (winUrl) routeAuthDeepLink(winUrl);
   }
-  createWindow();
-  createTray();
   try {
     initLibsignalBridge(app.getPath('userData'));
   } catch (err) {
-    console.error('libsignal init deferred:', err);
+    libsignalInitError = err?.message || String(err);
+    console.error('libsignal init failed:', err);
+    dialog.showErrorBox(
+      'SSC — Secure messaging unavailable',
+      `The encryption engine could not start. Restart SSC. If this continues, reinstall the app.\n\n${libsignalInitError}`,
+    );
   }
+  createWindow();
+  createTray();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
     else focusMainWindow();
@@ -209,8 +216,16 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.handle('libsignal', async (_event, { method, args }) => {
+  if (libsignalInitError) {
+    throw new Error(`libsignal bridge not initialized: ${libsignalInitError}`);
+  }
   return invokeLibsignal(method, args);
 });
+
+ipcMain.handle('desktop-libsignal-status', () => ({
+  ok: libsignalInitError == null,
+  error: libsignalInitError,
+}));
 
 const SECURE_STORE_FILE = () => path.join(app.getPath('userData'), 'ssc-secure-store.json');
 

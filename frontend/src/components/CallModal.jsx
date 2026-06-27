@@ -4,6 +4,7 @@ import { Phone, VideoCamera, MicrophoneSlash, Microphone, VideoCameraSlash, Arro
 import { useLocale } from '../context/LocaleContext';
 import { useMobileLayout } from '../lib/use-mobile';
 import { getBackendUrl } from '../lib/platform';
+import { toastSignalingFailure } from '../chat/signalingErrors';
 import { sendSignaling, unpackIncomingSignaling } from '../lib/signal/webrtcSignaling';
 import {
   acquireLocalMediaStream,
@@ -116,7 +117,8 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        sendSignaling(socket, { type: 'ice-candidate', to: peer.user_id, candidate: e.candidate }, signalingCtx);
+        sendSignaling(socket, { type: 'ice-candidate', to: peer.user_id, candidate: e.candidate }, signalingCtx)
+          .catch((err) => { toastSignalingFailure(err, t); });
       }
     };
     pc.ontrack = (e) => {
@@ -154,16 +156,27 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       return;
     }
 
-    if (direction === 'outgoing') {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await sendSignaling(socket, { type: 'call-offer', to: peer.user_id, mode, sdp: offer }, signalingCtx);
-    } else if (signal?.sdp) {
-      await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await sendSignaling(socket, { type: 'call-answer', to: peer.user_id, sdp: answer }, signalingCtx);
-      setStatus('connected');
+    try {
+      if (direction === 'outgoing') {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await sendSignaling(socket, { type: 'call-offer', to: peer.user_id, mode, sdp: offer }, signalingCtx);
+      } else if (signal?.sdp) {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await sendSignaling(socket, { type: 'call-answer', to: peer.user_id, sdp: answer }, signalingCtx);
+        setStatus('connected');
+      }
+    } catch (err) {
+      if (toastSignalingFailure(err, t)) {
+        cleanup();
+        onClose?.();
+        return;
+      }
+      toast.error(t('callMediaError'));
+      cleanup();
+      onClose?.();
     }
   };
 
@@ -192,8 +205,10 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       await pc.setLocalDescription(answer);
       await sendSignaling(socket, { type: 'call-answer', to: peer.user_id, sdp: answer }, signalingCtx);
       applyRemoteMode(nextMode);
-    } catch {
-      toast.error(t('callMediaError'));
+    } catch (err) {
+      if (!toastSignalingFailure(err, t)) {
+        toast.error(t('callMediaError'));
+      }
     } finally {
       renegotiatingRef.current = false;
     }
@@ -211,20 +226,30 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
           myUserId: user?.user_id,
           peerUserId: peer.user_id,
         });
-      } catch {
+      } catch (err) {
+        console.warn('[SSC] call modal signaling unpack failed:', err?.message || err);
+        toast.error(t('callSignalingDecryptFailed'));
         return;
       }
       if (data.type === 'call-answer' && data.from === peer.user_id) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
           if (status !== 'connected') setStatus('connected');
-        } catch {}
+        } catch (err) {
+          console.warn('[SSC] call answer SDP failed:', err?.message || err);
+          toast.error(t('callSdpFailed'));
+        }
       } else if (data.type === 'call-offer' && data.from === peer.user_id) {
         if (status === 'connected' || pc.remoteDescription) {
           await handleRenegotiationOffer(data, signalingCtx);
         }
       } else if (data.type === 'ice-candidate' && data.from === peer.user_id) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } catch (err) {
+          console.warn('[SSC] ICE candidate failed:', err?.message || err);
+          toast.error(t('callIceFailed'));
+        }
       } else if (data.type === 'call-end' && data.from === peer.user_id) {
         setEndReason('ended');
         setStatus('ended');
@@ -305,8 +330,10 @@ export default function CallModal({ mode, direction, peer, user, socket, signal,
       setActiveMode(nextMode);
       activeModeRef.current = nextMode;
       if (nextMode === 'video') refreshRemoteBindings();
-    } catch {
-      toast.error(t('callMediaError'));
+    } catch (err) {
+      if (!toastSignalingFailure(err, t)) {
+        toast.error(t('callMediaError'));
+      }
     } finally {
       renegotiatingRef.current = false;
       setModeBusy(false);

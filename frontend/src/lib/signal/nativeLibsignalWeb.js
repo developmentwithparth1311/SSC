@@ -25,4 +25,12 @@ export class SscLibsignalWeb extends WebPlugin {
   async decryptSignalMessage() {
     throw new Error('Signal decrypt requires the SSC Android app');
   }
+
+  async deleteSession() {
+    return { deleted: false, reason: 'web' };
+  }
+
+  async clearAllSessions() {
+    return { cleared: false, reason: 'web' };
+  }
 }

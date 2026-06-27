@@ -32,7 +32,9 @@ export class ChatSocket {
       try {
         const data = JSON.parse(ev.data);
         this.handlers.onMessage && this.handlers.onMessage(data);
-      } catch {}
+      } catch (err) {
+        console.warn('[SSC] ws frame parse failed:', err?.message || err);
+      }
     };
     this.ws.onclose = () => {
       this.alive = false;
@@ -40,7 +42,9 @@ export class ChatSocket {
       this.handlers.onClose && this.handlers.onClose();
       this.reconnectTimer = setTimeout(() => this.connect(), 3000);
     };
-    this.ws.onerror = () => {};
+    this.ws.onerror = () => {
+      console.warn('[SSC] websocket error');
+    };
   }
 
   send(payload) {

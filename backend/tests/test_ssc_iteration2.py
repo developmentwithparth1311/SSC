@@ -13,11 +13,12 @@ import requests
 import websockets
 import pyotp
 
-from test_helpers import auth_headers as _auth_headers, make_mutual_contacts
+from test_helpers import auth_headers as _auth_headers, make_mutual_contacts, ws_connect_url
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8000").rstrip("/")
 API = f"{BASE_URL}/api"
-WS_URL = BASE_URL.replace("https://", "wss://").replace("http://", "ws://") + "/api/ws"
+WS_BASE = BASE_URL.replace("https://", "wss://").replace("http://", "ws://")
+WS_URL = f"{WS_BASE}/api/ws"
 
 SUFFIX = uuid.uuid4().hex[:4]
 
@@ -501,8 +502,10 @@ async def test_ws_forwards_read_receipt():
     u2_token = state["u2_token"]
     dm_id = state["dm_id"]
 
-    async with websockets.connect(f"{WS_URL}?token={u1_token}") as u1_ws, \
-               websockets.connect(f"{WS_URL}?token={u2_token}") as u2_ws:
+    u1_url = ws_connect_url(API, WS_BASE, u1_token)
+    u2_url = ws_connect_url(API, WS_BASE, u2_token)
+    async with websockets.connect(u1_url) as u1_ws, \
+               websockets.connect(u2_url) as u2_ws:
         # drain "connected" greeting
         for ws in (u1_ws, u2_ws):
             greet = await asyncio.wait_for(ws.recv(), timeout=5)

@@ -261,6 +261,25 @@ export class SscDesktopSignalStore extends SessionStore {
     return [...(this.#data.prekey_ids || [])];
   }
 
+  deleteSession(peerUserId) {
+    const addr = ProtocolAddress.new(peerUserId, 1);
+    const sessionKey = addrKey(addr);
+    delete this.#data.sessions[sessionKey];
+    const senderPrefix = `${sessionKey}:`;
+    for (const key of Object.keys(this.#data.sender_keys)) {
+      if (key.startsWith(senderPrefix)) {
+        delete this.#data.sender_keys[key];
+      }
+    }
+    this.#touch();
+  }
+
+  clearAllSessions() {
+    this.#data.sessions = {};
+    this.#data.sender_keys = {};
+    this.#touch();
+  }
+
   wipeAll() {
     try {
       const fp = this.#filePath();

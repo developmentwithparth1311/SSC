@@ -67,6 +67,12 @@ def register_websocket(app):
                                 logger.warning(
                                     f"WS signaling rejected user={user_id} type={t}: {exc}"
                                 )
+                                await ws.send_text(json.dumps({
+                                    "type": "signaling-error",
+                                    "original_type": t,
+                                    "to": to_user,
+                                    "detail": str(exc),
+                                }))
                                 continue
                             payload = {
                                 **relay_body,

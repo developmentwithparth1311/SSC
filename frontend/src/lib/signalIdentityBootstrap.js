@@ -17,6 +17,7 @@ export async function bootstrapSignalIdentity(refreshUser) {
     }
     return { ok: true, result };
   } catch (err) {
+    console.warn('[SSC] bootstrapSignalIdentity failed:', err?.message || err);
     return { ok: false, reason: err?.message || 'prekey_upload_failed' };
   }
 }
