@@ -114,5 +114,6 @@ credentials.json
 backend/firebase/
 *firebase-adminsdk*.json
 atlas-credentials.env
+atlas-api.env
 **/google-services.json
 **/GoogleService-Info.plist

@@ -488,7 +488,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | O.3 | **Hardware-backed device wrap** — Android EncryptedSharedPreferences + Electron safeStorage | localStorage theft | [x] |
 | O.4 | **Verify UI** — profile sheet only; badge not in default chat | dev confusion | [x] |
 | O.5 | **Structured self-audit checklist** | marketing trust | [x] `test_reports/TASK_O_SELF_AUDIT_CHECKLIST.md` |
-| O.6 | **Mongo network tighten** (private endpoint or IP allowlist) | credential leak blast radius | [~] `scripts/ATLAS_NETWORK_HARDENING.md` — apply at scale |
+| O.6 | **Mongo network tighten** (private endpoint or IP allowlist) | credential leak blast radius | [x] GCP NAT **34.140.240.41** + VPC connector + Cloud Run egress · Atlas allowlist via `scripts/apply_atlas_ip_allowlist.py` |
 
 ---
 
@@ -681,6 +681,7 @@ yarn test:ci
 | 2026-06-26 | **Construction gate** — invite-only password (`REACT_APP_SITE_PREVIEW_PASSWORD`); 5-try lockout; `?access=` bookmark; flip `REACT_APP_SITE_UNDER_CONSTRUCTION=false` at launch |
 | 2026-06-26 | **Founder plan** — J all-day 27 Jun; O.1–O.6 after J; paid store items next week; site gate until app flow ≥90%; N.6 Gmail→contact@ inbound OK |
 | 2026-06-26 | **TASK O code** — RSA send blocked installed; group signaling encrypt; hardware device wrap; verify via profile sheet; self-audit checklist; Atlas hardening doc; Mongo MCP installed |
+| 2026-06-27 | **Gap fix** — GridFS orphans 0 (prod+dev); O.6 GCP NAT **34.140.240.41** + `ssc-vpc-connector` + Cloud Run `ssc-api-00021-6k6`; evidence `test_reports/gap_fix_gridfs_o6_2026-06-27.md` |
 | 2026-06-27 | **v1.0.9** — TASK O client rebuild (APK build 10 + Windows); PRODUCT_BLUEPRINT v2.2; housekeeping notes; full founder audit |
 | 2026-06-24 | **TASK D complete** — permissions, duplex audio, ringtone; frontend 55 tests |
 | 2026-06-24 | **TASK E complete** — voice/images/files; frontend 62 tests |

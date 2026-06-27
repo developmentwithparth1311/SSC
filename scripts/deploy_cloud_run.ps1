@@ -49,6 +49,8 @@ try {
         --timeout 300 `
         --min-instances 0 `
         --max-instances 3 `
+        --vpc-connector ssc-vpc-connector `
+        --vpc-egress all-traffic `
         --env-vars-file $envYaml
 } finally {
     Pop-Location

@@ -71,7 +71,7 @@ This is a real consumer product in **founder + closed tester** phase, not a publ
 | Session | Stays logged in | JWT in memory + AES device wrap + hardware store | O.3 ✅ |
 | Retention | 24h shown | Global TTL; not per-user yet | M.6 v1.1 |
 | Translation | On-device Android | Server translation off in prod | ✅ |
-| Mongo network | — | Atlas `0.0.0.0/0` allowlist | O.6 doc only |
+| Mongo network | Cloud Run NAT IP | Atlas `0.0.0.0/0` → tighten via script | O.6 GCP ✅ |
 
 ---
 
@@ -79,7 +79,7 @@ This is a real consumer product in **founder + closed tester** phase, not a publ
 
 | Piece | Status |
 |-------|--------|
-| API | Cloud Run `ssc-api-00019-4zf` · `https://api.supersecurechat.com` |
+| API | Cloud Run `ssc-api-00021-6k6` · `https://api.supersecurechat.com` |
 | Health | mongo ✅ · redis ✅ · ws_fanout redis |
 | DB | MongoDB Atlas `ssc` |
 | Sessions / rate limits | Upstash Redis |
@@ -106,7 +106,7 @@ This is a real consumer product in **founder + closed tester** phase, not a publ
 | Construction gate | TASK N + siteGate | ✅ password bypass |
 | Production hosting | Cloud Run + Firebase | ✅ |
 | Real-device QA | TASK J | [ ] scheduled 27 Jun |
-| Crypto hardening | TASK O | ✅ O.1–O.5 · O.6 doc |
+| Crypto hardening | TASK O | ✅ O.1–O.6 (GCP NAT; Atlas allowlist script) |
 | Founder infra setup | TASK P | [~] P.1–P.7 ✅ · P.6/P.8–P.10 open |
 
 ---

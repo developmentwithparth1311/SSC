@@ -1,39 +1,60 @@
 # MongoDB Atlas network hardening (TASK O.6)
 
-**When:** After scale-up or before public launch if you want a smaller attack surface.
+**Status (2026-06-27):** GCP static egress **applied**. Atlas allowlist script ready — run after API keys are in `backend/atlas-api.env`.
 
-## Current state
+## What “guide only” meant
 
-- Atlas cluster `ssc` allows Cloud Run via `0.0.0.0/0` (any IP with credentials).
-- Credentials live in `backend/cloud_run.env` (gitignored).
+Earlier, O.6 was only a markdown checklist because Cloud Run has **no fixed IP** by default, so you cannot safely remove Atlas `0.0.0.0/0` until GCP egress is pinned. That infra is now live.
 
-## Recommended steps (Atlas UI)
+## Applied on GCP (`super-chat-b0992`, `europe-west1`)
 
-1. Open [MongoDB Atlas](https://cloud.mongodb.com) → **Network Access**.
-2. Note Cloud Run does **not** have fixed egress IPs on default setup.
-3. Options:
-   - **Short term:** Keep `0.0.0.0/0` but rotate DB password quarterly and use least-privilege DB user.
-   - **Medium:** VPC connector + static NAT IP on GCP → allowlist that IP in Atlas.
-   - **Long:** Atlas **Private Endpoint** (paid feature) + VPC peering.
+| Resource | Name | Value |
+|----------|------|-------|
+| Static NAT IP | `ssc-nat-ip` | **34.140.240.41** |
+| Cloud Router | `ssc-nat-router` | default VPC |
+| Cloud NAT | `ssc-cloud-nat` | MANUAL_ONLY → `ssc-nat-ip` |
+| VPC connector | `ssc-vpc-connector` | `10.8.0.0/28` |
+| Cloud Run | `ssc-api` | `vpc-egress=all-traffic` via connector |
 
-## GCP static egress (optional script path)
+Re-apply idempotently:
 
-```bash
-# After configuring Cloud NAT on your VPC connector subnet:
-gcloud compute addresses describe ssc-nat-ip --region=YOUR_REGION --format='get(address)'
+```powershell
+.\scripts\setup_gcp_nat_egress.ps1
 ```
 
-Add that IP in Atlas → Network Access → Add IP Address.
+Verify API still reaches Mongo:
 
-## Verification
-
-```bash
-curl -s https://api.supersecurechat.com/api/health | jq .mongo
+```powershell
+Invoke-RestMethod https://api.supersecurechat.com/api/health
 ```
 
-Should remain `ok` after any allowlist change.
+## Atlas IP allowlist (final lockdown step)
+
+1. Copy `backend/atlas-api.env.example` → `backend/atlas-api.env`
+2. Add Atlas Admin API keys (Organization → Access Manager → API Keys)
+3. Set `SSC_DEV_EGRESS_IP` to your laptop public IP if you run janitor/scripts locally
+4. Run:
+
+```powershell
+backend\venv\Scripts\python.exe scripts\apply_atlas_ip_allowlist.py
+```
+
+This **adds** `34.140.240.41/32` (Cloud Run) + your dev IP, then **removes** `0.0.0.0/0` and `::/0`.
+
+Dry-run first:
+
+```powershell
+backend\venv\Scripts\python.exe scripts\apply_atlas_ip_allowlist.py --dry-run
+```
+
+## Manual fallback (Atlas UI)
+
+1. [MongoDB Atlas](https://cloud.mongodb.com) → **Network Access**
+2. **Add** `34.140.240.41/32` — comment: SSC Cloud Run NAT
+3. **Add** your dev machine IP `/32` — comment: founder scripts (optional)
+4. **Delete** `0.0.0.0/0` and `::/0` only after step 2 health check passes
 
 ## Cost note
 
-- IP allowlist changes: **free**
-- Private Endpoint / dedicated peering: **paid** Atlas/GCP networking — defer until traffic justifies it
+- Static IP + NAT + VPC connector: low monthly GCP cost on current traffic
+- Atlas Private Endpoint: paid — defer until scale requires it

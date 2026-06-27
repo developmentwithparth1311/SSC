@@ -97,35 +97,42 @@ async def _delete_expired_file_records(database, report: JanitorRunReport, *, no
 
 
 async def _delete_orphan_gridfs_blobs(database, gridfs_bucket, report: JanitorRunReport, *, batch_size: int) -> None:
-    cursor = database["ssc_files.files"].find({}, {"_id": 1, "filename": 1}).limit(batch_size)
+    """Scan GridFS in batches until no orphans remain in a full pass."""
+    while True:
+        deleted_this_pass = 0
+        cursor = database["ssc_files.files"].find({}, {"_id": 1, "filename": 1}).limit(batch_size)
 
-    async for blob in cursor:
-        report.scanned_gridfs_blobs += 1
-        blob_id = blob.get("_id")
-        filename = blob.get("filename")
-        if not blob_id or not filename:
-            report.errors += 1
-            continue
+        async for blob in cursor:
+            report.scanned_gridfs_blobs += 1
+            blob_id = blob.get("_id")
+            filename = blob.get("filename")
+            if not blob_id or not filename:
+                report.errors += 1
+                continue
 
-        owner = await database.files.find_one(
-            {
-                "file_id": filename,
-                "is_deleted": {"$ne": True},
-            },
-            {"_id": 1},
-        )
-        if owner:
-            continue
-
-        try:
-            await gridfs_bucket.delete(blob_id)
-            report.orphaned_gridfs_blobs_deleted += 1
-        except Exception as exc:
-            report.errors += 1
-            logger.warning(
-                f"retention-janitor orphan gridfs delete failed file={filename}: "
-                f"{safe_exception_label(exc)}"
+            owner = await database.files.find_one(
+                {
+                    "file_id": filename,
+                    "is_deleted": {"$ne": True},
+                },
+                {"_id": 1},
             )
+            if owner:
+                continue
+
+            try:
+                await gridfs_bucket.delete(blob_id)
+                report.orphaned_gridfs_blobs_deleted += 1
+                deleted_this_pass += 1
+            except Exception as exc:
+                report.errors += 1
+                logger.warning(
+                    f"retention-janitor orphan gridfs delete failed file={filename}: "
+                    f"{safe_exception_label(exc)}"
+                )
+
+        if deleted_this_pass == 0:
+            break
 
 
 async def run_retention_janitor_once_with_handles(database, gridfs_bucket) -> JanitorRunReport:
