@@ -73,3 +73,12 @@ SSC is **install-only** (APK + desktop). Browser-tab chat is blocked. Many react
 - Remaining transitive alerts under `react-scripts` (long-term: CRA migration or eject)
 - Controlled Electron bump in `frontend/desktop` (test `SSC-BUILD-DESKTOP-WIN.bat`)
 - Backend grouped minor/patch Dependabot PRs (`/backend`)
+
+## Branch protection (`main`)
+
+`main` is protected on GitHub:
+
+- **Required checks:** `Frontend tests`, `Backend tests` (must pass; branch must be up to date)
+- **Blocked:** force-push, branch deletion
+- **Allowed:** direct push by maintainer when CI is green (no PR required for solo work)
+- **Script:** `scripts/github-protect-main.ps1` (re-apply after `gh auth login` if settings are reset)
