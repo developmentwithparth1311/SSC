@@ -19,16 +19,16 @@ STEP 3 — Create OAuth 2.0 Client ID — Web application
     http://localhost:3000
     http://localhost
     http://127.0.0.1:8000
-    http://192.168.1.154:8000
+    http://<your-lan-ip>:8000
   Authorized redirect URIs:
     http://127.0.0.1:8000/api/auth/google/callback
-    http://192.168.1.154:8000/api/auth/google/callback
+    http://<your-lan-ip>:8000/api/auth/google/callback
     http://localhost:8000/api/auth/google/callback
 
-  Copy Client ID and Client Secret → backend/.env:
+  Copy Client ID and Client Secret → backend/.env (never commit):
     GOOGLE_CLIENT_ID=....apps.googleusercontent.com
-    GOOGLE_CLIENT_SECRET=GOCSPX-...
-    GOOGLE_REDIRECT_URI=http://192.168.1.154:8000/api/auth/google/callback
+    GOOGLE_CLIENT_SECRET=<from-google-console>
+    GOOGLE_REDIRECT_URI=http://<your-lan-ip>:8000/api/auth/google/callback
     FRONTEND_OAUTH_REDIRECT=http://localhost:3000
     NATIVE_OAUTH_REDIRECT=http://localhost
 
@@ -40,10 +40,9 @@ STEP 4 — Create OAuth 2.0 Client ID — Android (optional, improves native)
   Rebuild APK: yarn cap:sync && gradlew assembleDebug
 
 STEP 5 — Restart backend
-  SSC-START-FOR-PHONE.bat
 
 STEP 6 — Test
-  - Web: http://localhost:3000/login → Continue with Google
+  - Web dev shell: http://localhost:3000/login → Continue with Google (installed app required for production)
   - Phone: SSC app login → Continue with Google (opens browser, returns to app)
 
 New Google users go to /setup to pick username + encryption password.

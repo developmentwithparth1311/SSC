@@ -138,7 +138,7 @@ Large files that should be split in a future refactor (not blocking launch):
 1. **Trust perimeter** — Turnstile, API domain, email, downloads ✅
 2. **In-app polish** — profile, Settings, errors ✅
 3. **Crypto hardening** — RSA send block, group signaling, keystore ✅
-4. **Founder QA** — smashmaxxx ↔ dots (TASK J) ← **now**
+4. **Founder QA** — tester Windows ↔ tester Android (TASK J) ← **now**
 5. **Wider rollout** — App Distribution, Play Store (next week)
 
 ---

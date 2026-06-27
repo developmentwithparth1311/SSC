@@ -29,7 +29,7 @@ import { collectEncryptionDiagnostics } from '../chat/encryptionDiagnostics';
 import { unwrapPrivateKey, wrapPrivateKey } from '../lib/crypto';
 import { saveVaultCredential } from '../lib/vaultCredentialStore';
 
-const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.11';
+const APP_VERSION = process.env.REACT_APP_SSC_VERSION || '1.0.12';
 
 function platformLabel(t) {
   if (isNativeApp()) return t('settingsPlatformAndroid');

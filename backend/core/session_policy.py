@@ -119,7 +119,7 @@ ENGINE5_STEPS: List[Tuple[str, str, bool]] = [
 # Founder deployment intent (charter §2)
 TESTING_STRATEGY = {
     "lan_localhost": "founder laptop dev preview only — not for external users",
-    "real_testers": "Firebase App Distribution — smashmaxxx, raullavita1988, velvetnightshub @gmail.com",
+    "real_testers": "Firebase App Distribution — invite-only tester list (see scripts/firebase_testers.txt.example)",
     "domain_https": "deferred until ~2026-06-28",
     "no_lan_exposure": "tester APK must use production API URL at build time",
 }

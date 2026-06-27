@@ -26,7 +26,7 @@ copy .env.example .env        # set MONGO_URL, JWT_SECRET
 .\venv\Scripts\python.exe -m uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
-API: `http://<your-pc-lan-ip>:8000` (e.g. `http://192.168.1.154:8000`)
+API: `http://<your-pc-lan-ip>:8000`
 
 ### 3. Frontend (PC browser)
 
@@ -43,7 +43,7 @@ Edit `frontend/package.json` `build:phone` script with your PC LAN IP, or set en
 
 ```powershell
 cd frontend
-$env:REACT_APP_BACKEND_URL="http://192.168.1.154:8000"
+$env:REACT_APP_BACKEND_URL="http://<your-pc-lan-ip>:8000"
 yarn build:phone
 npx cap sync android
 cd android; .\gradlew assembleDebug
@@ -122,14 +122,18 @@ SSC-main/
 | `frontend/.env.example` | `REACT_APP_BACKEND_URL`, Turnstile, VAPID |
 | `frontend/.env.mobile.example` | Template for HTTPS production mobile builds |
 
-Copy examples to `.env` — **never commit** `.env`, `google-services.json`, or Firebase service account JSON.
+Copy examples to `.env` — **never commit** `.env`, `cloud_run.env`, `google-services.json`, Firebase service account JSON, or `scripts/firebase_testers.txt`. See `SECURITY.md`.
+
+## Open source & help
+
+SSC is AGPL-3.0 (libsignal in the APK requires source availability when you distribute builds). The repo is intended to be **public**; production secrets stay in gitignored env files and cloud consoles. See `CONTRIBUTING.md` if you want to help.
 
 ### LAN CORS tip
 
 Add your dev origins to `backend/.env`:
 
 ```
-CORS_ORIGINS=http://localhost:3000,http://192.168.1.154:3000,http://192.168.1.154:8000
+CORS_ORIGINS=http://localhost:3000,http://<your-pc-lan-ip>:3000,http://<your-pc-lan-ip>:8000
 ```
 
 ## Roadmap & security

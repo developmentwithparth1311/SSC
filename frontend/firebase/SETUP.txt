@@ -40,10 +40,7 @@ https://console.firebase.google.com/project/super-chat-b0992
 1. App Distribution (testers)
    - Release & Monitor → App Distribution
    - Register app: chat.ssc.secure (if prompted)
-   - Tester emails (canonical list: scripts/firebase_testers.txt):
-       smashmaxxx@gmail.com
-       raullavita1988@gmail.com
-       velvetnightshub@gmail.com
+   - Tester emails: copy scripts/firebase_testers.txt.example → firebase_testers.txt (gitignored)
    - Add via console OR after firebase login:
        .\scripts\add_firebase_testers.ps1
    - Upload APK after build (see STEP D)

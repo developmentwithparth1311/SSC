@@ -2,8 +2,8 @@
 <!-- Production: HTTPS only. Cleartext limited to dev/LAN domains below. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
+    <!-- For LAN dev: add your PC IP as a domain here (do not commit personal IPs to a public fork). -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.1.154</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>

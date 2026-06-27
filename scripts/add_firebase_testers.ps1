@@ -8,6 +8,11 @@
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $ListFile = Join-Path $PSScriptRoot "firebase_testers.txt"
+$ExampleFile = Join-Path $PSScriptRoot "firebase_testers.txt.example"
+
+if (-not (Test-Path $ListFile)) {
+    Write-Error "Missing $ListFile — copy firebase_testers.txt.example and add your tester emails (file is gitignored)."
+}
 
 if (-not (Get-Command firebase -ErrorAction SilentlyContinue)) {
     Write-Error "firebase CLI not found. Run: npm install -g firebase-tools"

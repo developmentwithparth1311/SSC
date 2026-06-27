@@ -13,7 +13,7 @@
 
 ## cloud_run.env updates (local, not committed)
 
-- `TURNSTILE_SITEKEY` + `TURNSTILE_SECRET` (Cloudflare raullavita1988 account)
+- `TURNSTILE_SITEKEY` + `TURNSTILE_SECRET` (Cloudflare account — not in repo)
 - `CORS_ORIGINS` extended with `www.supersecurechat.com`, `supersecurechat.com`, `super-chat-b0992.web.app`
 
 ## TASK P founder actions

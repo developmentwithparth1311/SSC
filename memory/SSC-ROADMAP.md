@@ -14,7 +14,7 @@
 
 1. **Done** — Engines 1–5, 8–10, 9 + TASK A–G code + TASK H (except H.7) + TASK L.1–L.6 + **v1.0.7** builds.
 2. **Now** — finish remaining non-paid items (landing polish ✅, **P.6** TURN off-LAN).
-3. **Tomorrow (27 Jun)** — **TASK J** all-day founder QA (smashmaxxx ↔ dots) on v1.0.8 until green.
+3. **Tomorrow (27 Jun)** — **TASK J** all-day founder QA (tester-win ↔ tester-android) on v1.0.8 until green.
 4. **After J** — **TASK O** O.1–O.6 (code; O.5 = structured self-audit unless paid pen test).
 5. **Next week** — paid founder items (**P.8** code signing, **P.9** Play Console $25, **N.8** / **I.6** Play Store).
 6. **Website** — construction gate stays on until founder + agent agree app flow **≥90%**; then `REACT_APP_SITE_UNDER_CONSTRUCTION=false`.
@@ -197,7 +197,7 @@
 | **M** | In-app UX polish (profile, Settings, feel) | [x] M.1–M.11 done (M.6 deferred v1.1) |
 | **N** | Landing, legal, downloads, trust | [x] N.1–N.7 done; N.8 Play Store deferred |
 | **O** | Crypto hardening (RSA retire, group signaling, keystore) | [ ] after M/N |
-| **J** QA matrix | smashmaxxx ↔ dots — **paused** until M/O ready | [ ] |
+| **J** QA matrix | tester-win ↔ tester-android — **paused** until M/O ready | [ ] |
 | **I** Infra remainder | Play Store, email routing, code-sign | [ ] |
 | **K** Deferred | iOS, SFU, own-metal, email confirm | — |
 
@@ -208,7 +208,7 @@
 **Do now (before wider testers):**
 1. Run full **TASK J matrix** on v1.0.5 — this is the real gate.
 2. Test **cellular ↔ Wi‑Fi call** — if it fails, TURN is not optional for US↔UK.
-3. Do **not** recreate smashmaxxx/dots accounts until retention timer check (per policy).
+3. Do **not** recreate tester-win/tester-android accounts until retention timer check (per policy).
 
 **Do soon (high ROI):**
 1. **TASK H.5** — Google-only email error (reduces support noise).
@@ -249,7 +249,7 @@
 | A.7 | Hide **VERIFY / QR** from chat header and mobile menu | `ChatHome.jsx` | [x] |
 | A.8 | **Silent Signal bootstrap** on login + cold start | `AuthContext.jsx` | [x] |
 | A.9 | Remove **SIG/RSA protocol labels** from messages | `Message.jsx` | [x] |
-| A.10 | Founder retest: no crypto jargon; messages still E2E | smashmaxxx ↔ dots after rebuild | [ ] |
+| A.10 | Founder retest: no crypto jargon; messages still E2E | tester-win ↔ tester-android after rebuild | [ ] |
 
 **Note:** Existing Google accounts created before this deploy have no device credential yet — one email/password login (or new setup) seeds auto-unlock on that device.
 
@@ -265,7 +265,7 @@
 | B.2 | `bootstrapSessionFromDevice()` before `/auth/me` on cold start | `AuthContext.jsx`, `sessionStore.js` | [x] |
 | B.3 | Logout + panic clear encrypted wrap; 401 clears stale session | `clientFootprintOrchestrator.js`, `clearSessionToken` | [x] |
 | B.4 | Policy docs updated (S3 gap closed) | `SESSION_HARDENING_CHARTER.md`, `CLIENT_FOOTPRINT_CHARTER.md`, `session_policy.py` | [x] |
-| B.5 | Founder QA: force-stop Android → reopen → still in chat | dots device after rebuild | [ ] |
+| B.5 | Founder QA: force-stop Android → reopen → still in chat | tester-android device after rebuild | [ ] |
 
 ---
 
@@ -278,8 +278,8 @@
 | C.1 | WS events: `friend-request`, `friend-request-sent`, `friend-accepted`, `friend-rejected`, `contacts-changed` | `contact_realtime.py`, `contacts.py` | [x] |
 | C.2 | Client refresh on WS + `ssc-contacts-refresh` event | `ChatHome.jsx`, `contactRealtime.js` | [x] |
 | C.3 | FCM foreground/background → `dispatchContactsRefresh` | `native-push.js` | [x] |
-| C.4 | Founder QA: send request PC → phone pending live | smashmaxxx → dots after rebuild | [ ] |
-| C.5 | Founder QA: accept on phone → PC roster live | dots → smashmaxxx after rebuild | [ ] |
+| C.4 | Founder QA: send request PC → phone pending live | tester-win → tester-android after rebuild | [ ] |
+| C.5 | Founder QA: accept on phone → PC roster live | tester-android → tester-win after rebuild | [ ] |
 
 **Root cause fixed:** Push was skipped when WS connected but no WS event was sent — live app never refreshed roster.
 
@@ -297,7 +297,7 @@
 | D.4 | Fix **audio routing** — remote `<audio>` for voice calls; `getUserMedia` after grant | `callMedia.js`, `CallModal.jsx`, `GroupCallModal.jsx` | [x] |
 | D.5 | **Ringtone** on callee (phone + desktop) | `callRingtone.js` Web Audio loop | [x] |
 | D.6 | Desktop → phone **video**: callee can answer; **audio** both directions | Permissions gate + duplex audio element | [x] |
-| D.7 | QA matrix: voice call, video call, cancel, busy | smashmaxxx ↔ dots after rebuild | [ ] |
+| D.7 | QA matrix: voice call, video call, cancel, busy | tester-win ↔ tester-android after rebuild | [ ] |
 
 **Root cause fixed:** Android manifest lacked `RECORD_AUDIO`/`CAMERA`; voice calls had no remote `<audio>` element (one-way audio).
 
@@ -314,7 +314,7 @@
 | E.3 | **Image preview** modal — tap to open, pinch/zoom, save | `ImagePreviewModal.jsx` | [x] |
 | E.4 | Screenshot paste vs file attach — same encrypted attachment UX | `ChatHome.jsx` `onComposerPaste` → `attachFile` | [x] |
 | E.5 | Plain file attach (non-image) — name, size, download | `EncryptedFileAttachment` + `formatFileSize` | [x] |
-| E.6 | QA: PC ↔ phone image + voice note round-trip | smashmaxxx ↔ dots after rebuild | [ ] |
+| E.6 | QA: PC ↔ phone image + voice note round-trip | tester-win ↔ tester-android after rebuild | [ ] |
 
 **Root cause fixed:** Desktop `MediaRecorder` without timeslice produced empty blobs; voice calls had no remote audio element (fixed in TASK D).
 
@@ -330,7 +330,7 @@
 | F.2 | **Mute** — persist per-conversation; silence push | `toggleMute` toasts; sidebar muted badge; backend `is_muted_pair` (existing) | [x] |
 | F.3 | **Create group** — fix Create button (API + navigation) | Contacts-only picker; min 1 member (2-person group); `conversations.py` | [x] |
 | F.4 | **Group naming** (P1-4) — require title or auto “Alice, Bob +N” | `groupDisplayLabel.js` + optional local title in `groupLabels.js` | [x] |
-| F.5 | QA: block/mute on PC + phone; create 2-member group; send message | smashmaxxx ↔ dots after rebuild | [ ] |
+| F.5 | QA: block/mute on PC + phone; create 2-member group; send message | tester-win ↔ tester-android after rebuild | [ ] |
 
 **Root cause fixed:** Group create required 3+ members; picker searched all users not contacts only.
 
@@ -347,7 +347,7 @@
 | G.3 | **`backButton`** listener — thread → list, list → minimize | `nativeBack.js`, `capacitor-init.js` | [x] |
 | G.4 | Replace history when leaving thread; push only when entering | `chatNavigateOptions()` | [x] |
 | G.5 | System back on chat list minimizes app; modals close first | `ChatHome.jsx` back handler | [x] |
-| G.6 | Founder QA: Samsung gesture back — no reopen loop | dots device after rebuild | [ ] |
+| G.6 | Founder QA: Samsung gesture back — no reopen loop | tester-android device after rebuild | [ ] |
 
 ---
 
@@ -375,7 +375,7 @@
 | I.1 | **Custom domain** + DNS for API / hosting | ~28 Jun 2026 | [x] `www` + `api.supersecurechat.com` live |
 | I.2 | **Turnstile** captcha on production register/login | ~28 Jun 2026 | [x] P.1–P.2 + v1.0.8 clients |
 | I.3 | **TURN** verification off-LAN (cellular ↔ Wi‑Fi calls) | Founder manual | [ ] |
-| I.4 | **Retention proof** — 24h delete on smashmaxxx ↔ dots thread | In progress (backend proof pass; founder thread proof pending) | [~] |
+| I.4 | **Retention proof** — 24h delete on tester-win ↔ tester-android thread | In progress (backend proof pass; founder thread proof pending) | [~] |
 | I.5 | Rebuild **APK + desktop** after TASK batches; bump version | Post-fix | [x] |
 | I.6 | **Play Store** listing (AGPL review ✅) | Post-P0 | [ ] |
 | I.7 | Redeploy Cloud Run when backend changes | Per deploy | [x] |
@@ -384,7 +384,7 @@
 
 ### TASK J — QA verification matrix (before wider testers)
 
-Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
+Run on **tester-win (Win)** + **tester-android (Android)** against production API.
 
 | Area | Test | Depends on | Status |
 |------|------|------------|--------|
@@ -503,7 +503,7 @@ Run on **smashmaxxx (Win)** + **dots (Android)** against production API.
 | P.3 | Map **`api.supersecurechat.com`** → Cloud Run | GCP console or `gcloud beta` + Porkbun DNS | L.7, I.1 | [x] SSL live; `/api/health` 200 |
 | P.4 | Update **Google OAuth** authorized domains + redirect URI | Google Cloud Console | OAuth on new API domain | [x] 26 Jun 2026 |
 | P.5 | Update **CORS_ORIGINS** + `GOOGLE_REDIRECT_URI` + `REACT_APP_BACKEND_URL` | `cloud_run.env` + frontend env | clients | [x] api.supersecurechat.com |
-| P.6 | **TURN off-LAN call test** (cellular ↔ Wi‑Fi) | smashmaxxx ↔ dots | I.3, L.7 |
+| P.6 | **TURN off-LAN call test** (cellular ↔ Wi‑Fi) | tester-win ↔ tester-android | I.3, L.7 |
 | P.7 | **Porkbun hosted email** `contact@` + DNS (SPF/DKIM) | Porkbun | [x] N.6 — click Fix DNS when testing inbound |
 | P.8 | **Windows code signing** cert (optional) | SSL.com / DigiCert | SmartScreen | [ ] **next week** |
 | P.9 | **Play Console** developer account ($25) | Google Play | I.6 | [ ] **next week** |
@@ -544,7 +544,7 @@ Phase 5 — Wider testers + Play Store (I.6, N.8)         ← launch
 |-------|-----------|
 | **1 → A then B then C** | *Product feel first:* hide vault/crypto noise, stay logged in, live contacts — biggest “not like WhatsApp” gaps |
 | **2 → C then B then D** | *Connectivity first:* real-time social graph + session + calls — unblock daily use |
-| **3 → G then D then E** | *Android pain first:* back stack + permissions + media — dots device UX |
+| **3 → G then D then E** | *Android pain first:* back stack + permissions + media — tester-android device UX |
 | **4 → A only (sprint)** | Quick win: invisible security UX before touching backend |
 
 **Suggested default:** **TASK A** (invisible security) → **TASK B** (session) → **TASK C** (real-time) → **TASK G** (Android back) → **TASK D/E/F** in parallel where possible.
@@ -553,7 +553,7 @@ Phase 5 — Wider testers + Play Store (I.6, N.8)         ← launch
 
 ## Founder QA snapshot (24 Jun 2026)
 
-**Devices:** Windows `smashmaxxx` v1.0.4 ↔ Android `dots` v1.0.3–1.0.4 · Production API
+**Devices:** Windows `tester-win` v1.0.4 ↔ Android `tester-android` v1.0.3–1.0.4 · Production API
 
 ### Worked ✅
 
@@ -641,7 +641,7 @@ yarn test:ci
 | 2026-06-23 | Engines 1–5, 8 complete |
 | 2026-06-24 | Engines 9, 10 · unified identity · contacts privacy |
 | 2026-06-24 | HIGH audit · OAuth native redirects · v1.0.4 builds |
-| 2026-06-24 | Founder QA smashmaxxx ↔ dots · P0–P2 backlog |
+| 2026-06-24 | Founder QA tester-win ↔ tester-android · P0–P2 backlog |
 | 2026-06-24 | Founder policy — vault in concrete; auto libsignal; hide verify |
 | 2026-06-24 | **Roadmap restructure** — execution plan TASK A–K with subtasks |
 | 2026-06-24 | **TASK A complete** — invisible vault/crypto UX; `vaultCredentialStore.js`; frontend 32 tests pass |
