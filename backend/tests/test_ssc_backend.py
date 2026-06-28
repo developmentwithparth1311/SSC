@@ -363,6 +363,49 @@ async def test_websocket_ping_pong_and_typing():
         assert got_offer.get("from") == state["alice_user"]["user_id"]
 
 
+@pytest.mark.asyncio
+async def test_websocket_call_blocked_without_contact():
+    carol = {
+        "email": f"carol.test+{SUFFIX}@ssc.dev",
+        "password": "CarolPass2026!",
+        "username": f"carl{SUFFIX[:3]}",
+        "public_key": "PUBKEY_CAROL_BASE64",
+        "encrypted_private_key": "ENC_PRIV_CAROL",
+        "pk_salt": "SALT_CAROL",
+        "language": "en",
+        "captcha_token": "TEST-TOKEN",
+    }
+    r = requests.post(f"{API}/auth/register", json=carol, headers=REG_HEADERS)
+    assert r.status_code == 200, r.text
+    carol_user = r.json()["user"]
+    carol_token = r.json()["token"]
+
+    a_url = ws_connect_url(API, WS_BASE, state["alice_token"])
+    c_url = ws_connect_url(API, WS_BASE, carol_token)
+
+    async with websockets.connect(a_url) as a_ws, websockets.connect(c_url) as c_ws:
+        for ws in (a_ws, c_ws):
+            greet = await asyncio.wait_for(ws.recv(), timeout=5)
+            assert json.loads(greet)["type"] == "connected"
+
+        await a_ws.send(json.dumps({
+            "type": "call-offer",
+            "to": carol_user["user_id"],
+            "sdp": "fake-sdp",
+            "call_id": "blocked-c1",
+        }))
+
+        err_raw = await asyncio.wait_for(a_ws.recv(), timeout=5)
+        err = json.loads(err_raw)
+        assert err["type"] == "signaling-error"
+        assert err.get("original_type") == "call-offer"
+        assert err.get("to") == carol_user["user_id"]
+        assert "not permitted" in (err.get("detail") or "").lower()
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(c_ws.recv(), timeout=2)
+
+
 # ─── MongoDB TTL index ──────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_messages_ttl_index():

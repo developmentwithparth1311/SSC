@@ -88,6 +88,12 @@ def register_websocket(app):
                                 asyncio.create_task(send_push_for_call_end(to_user, user))
                         else:
                             logger.warning(f"WS call blocked: no permission between {user_id} and {to_user}")
+                            await ws.send_text(json.dumps({
+                                "type": "signaling-error",
+                                "original_type": t,
+                                "to": to_user,
+                                "detail": "call not permitted",
+                            }))
                     if data.get("group") and data.get("members"):
                         for m in data.get("members", []):
                             mid = m.get("user_id") if isinstance(m, dict) else m
