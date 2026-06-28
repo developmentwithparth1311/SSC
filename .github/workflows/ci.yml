@@ -89,12 +89,12 @@ jobs:
       - name: Run pytest with live API
         run: |
           uvicorn server:app --host 127.0.0.1 --port 8000 &
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:8000/api/health >/dev/null; then
               echo "API ready"
               break
             fi
-            if [ "$i" -eq 30 ]; then
+            if [ "$i" -eq 60 ]; then
               echo "API failed to start"
               exit 1
             fi
